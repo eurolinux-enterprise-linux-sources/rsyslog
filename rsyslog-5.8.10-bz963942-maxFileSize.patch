@@ -1,0 +1,51 @@
+From 06e4522c4a91829ae2918383e3a081a9bc8ce63e Mon Sep 17 00:00:00 2001
+From: Tomas Heinrich <theinric@redhat.com>
+Date: Thu, 18 Jul 2013 14:00:11 +0200
+Subject: [PATCH] bugfix: correction to the interface of stream obj
+
+The datatype of the argument to SetiMaxFileSize() was too small and
+could overflow.
+The SetMaxFileSize() interface wasn't used at all (possibly confused
+with SetiMaxFileSize()) and was dropped.
+---
+ runtime/stream.c |    2 +-
+ runtime/stream.h |    3 +--
+ 2 files changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/runtime/stream.c b/runtime/stream.c
+index 6b88d3f..f96d092 100644
+--- a/runtime/stream.c
++++ b/runtime/stream.c
+@@ -1429,7 +1429,7 @@ finalize_it:
+ /* property set methods */
+ /* simple ones first */
+ DEFpropSetMeth(strm, bDeleteOnClose, int)
+-DEFpropSetMeth(strm, iMaxFileSize, int)
++DEFpropSetMeth(strm, iMaxFileSize, int64)
+ DEFpropSetMeth(strm, iFileNumDigits, int)
+ DEFpropSetMeth(strm, tOperationsMode, int)
+ DEFpropSetMeth(strm, tOpenMode, mode_t)
+diff --git a/runtime/stream.h b/runtime/stream.h
+index 60c68cb..0f5efef 100644
+--- a/runtime/stream.h
++++ b/runtime/stream.h
+@@ -152,7 +152,6 @@ BEGINinterface(strm) /* name must also be changed in ENDinterface macro! */
+ 	rsRetVal (*Construct)(strm_t **ppThis);
+ 	rsRetVal (*ConstructFinalize)(strm_t *pThis);
+ 	rsRetVal (*Destruct)(strm_t **ppThis);
+-	rsRetVal (*SetMaxFileSize)(strm_t *pThis, int64 iMaxFileSize);
+ 	rsRetVal (*SetFileName)(strm_t *pThis, uchar *pszName, size_t iLenName);
+ 	rsRetVal (*ReadChar)(strm_t *pThis, uchar *pC);
+ 	rsRetVal (*UnreadChar)(strm_t *pThis, uchar c);
+@@ -170,7 +169,7 @@ BEGINinterface(strm) /* name must also be changed in ENDinterface macro! */
+ 	rsRetVal (*SetWCntr)(strm_t *pThis, number_t *pWCnt);
+ 	rsRetVal (*Dup)(strm_t *pThis, strm_t **ppNew);
+ 	INTERFACEpropSetMeth(strm, bDeleteOnClose, int);
+-	INTERFACEpropSetMeth(strm, iMaxFileSize, int);
++	INTERFACEpropSetMeth(strm, iMaxFileSize, int64);
+ 	INTERFACEpropSetMeth(strm, iMaxFiles, int);
+ 	INTERFACEpropSetMeth(strm, iFileNumDigits, int);
+ 	INTERFACEpropSetMeth(strm, tOperationsMode, int);
+-- 
+1.7.10.4
+

@@ -1,0 +1,58 @@
+From 412337a6633ee5b642804037b6c4acb4bffcc5c5 Mon Sep 17 00:00:00 2001
+From: Tomas Heinrich <theinric@redhat.com>
+Date: Wed, 14 Aug 2013 15:23:41 +0200
+Subject: [PATCH] Add directives for numerically specifying GID/UID
+
+The already present directives (FileOwner, FileGroup, DirOwner,
+DirGroup) translate names to numerical IDs, which depends on the user
+information being available during rsyslog's startup. This can fail if
+the information is obtained over a network or from a service such as
+SSSD. The new directives provide a way to specify the numerical IDs
+and bypass the lookup.
+---
+ doc/rsyslog_conf_global.html |    4 ++++
+ tools/omfile.c               |    4 ++++
+ 2 files changed, 8 insertions(+)
+
+diff --git a/doc/rsyslog_conf_global.html b/doc/rsyslog_conf_global.html
+index 21786a7..6061369 100644
+--- a/doc/rsyslog_conf_global.html
++++ b/doc/rsyslog_conf_global.html
+@@ -136,7 +136,9 @@ our paper on <a href="multi_ruleset.html">using multiple rule sets in rsyslog</a
+ <li><b>$CreateDirs</b> [<b>on</b>/off] - create directories on an as-needed basis</li>
+ <li><a href="rsconf1_dircreatemode.html">$DirCreateMode</a></li>
+ <li><a href="rsconf1_dirgroup.html">$DirGroup</a></li>
++<li>$DirGroupID &lt;number&gt; - GID in a numerical form</li>
+ <li><a href="rsconf1_dirowner.html">$DirOwner</a></li>
++<li>$DirOwnerID &lt;number&gt; - UID in a numerical form</li>
+ <li><a href="rsconf1_dropmsgswithmaliciousdnsptrrecords.html">$DropMsgsWithMaliciousDnsPTRRecords</a></li>
+ <li><a href="rsconf1_droptrailinglfonreception.html">$DropTrailingLFOnReception</a></li>
+ <li><a href="rsconf1_dynafilecachesize.html">$DynaFileCacheSize</a></li>
+@@ -147,7 +149,9 @@ our paper on <a href="multi_ruleset.html">using multiple rule sets in rsyslog</a
+ <li><a href="rsconf1_failonchownfailure.html">$FailOnChownFailure</a></li>
+ <li><a href="rsconf1_filecreatemode.html">$FileCreateMode</a></li>
+ <li><a href="rsconf1_filegroup.html">$FileGroup</a></li>
++<li>$FileGroupID &lt;number&gt; - GID in a numerical form</li>
+ <li><a href="rsconf1_fileowner.html">$FileOwner</a></li>
++<li>$FileOwnerID &lt;number&gt; - UID in a numerical form</li>
+ <li><a href="rsconf1_generateconfiggraph.html">$GenerateConfigGraph</a></li>
+ <li><a href="rsconf1_gssforwardservicename.html">$GssForwardServiceName</a></li>
+ <li><a href="rsconf1_gsslistenservicename.html">$GssListenServiceName</a></li>
+diff --git a/tools/omfile.c b/tools/omfile.c
+index fbd263c..57eafea 100644
+--- a/tools/omfile.c
++++ b/tools/omfile.c
+@@ -918,6 +918,10 @@ CODEmodInit_QueryRegCFSLineHdlr
+ 	CHKiRet(omsdRegCFSLineHdlr((uchar *)"dirgroup", 0, eCmdHdlrGID, NULL, &dirGID, STD_LOADABLE_MODULE_ID));
+ 	CHKiRet(omsdRegCFSLineHdlr((uchar *)"fileowner", 0, eCmdHdlrUID, NULL, &fileUID, STD_LOADABLE_MODULE_ID));
+ 	CHKiRet(omsdRegCFSLineHdlr((uchar *)"filegroup", 0, eCmdHdlrGID, NULL, &fileGID, STD_LOADABLE_MODULE_ID));
++	CHKiRet(omsdRegCFSLineHdlr((uchar *)"dirownerid", 0, eCmdHdlrInt, NULL, &dirUID, STD_LOADABLE_MODULE_ID));
++	CHKiRet(omsdRegCFSLineHdlr((uchar *)"dirgroupid", 0, eCmdHdlrInt, NULL, &dirGID, STD_LOADABLE_MODULE_ID));
++	CHKiRet(omsdRegCFSLineHdlr((uchar *)"fileownerid", 0, eCmdHdlrInt, NULL, &fileUID, STD_LOADABLE_MODULE_ID));
++	CHKiRet(omsdRegCFSLineHdlr((uchar *)"filegroupid", 0, eCmdHdlrInt, NULL, &fileGID, STD_LOADABLE_MODULE_ID));
+ 	CHKiRet(omsdRegCFSLineHdlr((uchar *)"dircreatemode", 0, eCmdHdlrFileCreateMode, NULL, &fDirCreateMode, STD_LOADABLE_MODULE_ID));
+ 	CHKiRet(omsdRegCFSLineHdlr((uchar *)"filecreatemode", 0, eCmdHdlrFileCreateMode, NULL, &fCreateMode, STD_LOADABLE_MODULE_ID));
+ 	CHKiRet(omsdRegCFSLineHdlr((uchar *)"createdirs", 0, eCmdHdlrBinary, NULL, &bCreateDirs, STD_LOADABLE_MODULE_ID));
+-- 
+1.7.10.4
+

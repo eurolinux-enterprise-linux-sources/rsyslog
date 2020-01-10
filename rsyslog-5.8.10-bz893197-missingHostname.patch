@@ -1,0 +1,23 @@
+diff -up rsyslog-5.8.10/runtime/msg.c.orig rsyslog-5.8.10/runtime/msg.c
+--- rsyslog-5.8.10/runtime/msg.c.orig	2013-08-13 21:36:44.392696489 +0200
++++ rsyslog-5.8.10/runtime/msg.c	2013-08-13 21:36:48.985693286 +0200
+@@ -982,11 +982,15 @@ msg_t* MsgDup(msg_t* pOld)
+ 	} else {
+ 		tmpCOPYSZ(RawMsg);
+ 	}
+-	if(pOld->iLenHOSTNAME < CONF_HOSTNAME_BUFSIZE) {
+-		memcpy(pNew->szHOSTNAME, pOld->szHOSTNAME, pOld->iLenHOSTNAME + 1);
+-		pNew->pszHOSTNAME = pNew->szHOSTNAME;
++	if(pOld->pszHOSTNAME == NULL) {
++		pNew->pszHOSTNAME = NULL;
+ 	} else {
+-		tmpCOPYSZ(HOSTNAME);
++		if(pOld->iLenHOSTNAME < CONF_HOSTNAME_BUFSIZE) {
++			memcpy(pNew->szHOSTNAME, pOld->szHOSTNAME, pOld->iLenHOSTNAME + 1);
++			pNew->pszHOSTNAME = pNew->szHOSTNAME;
++		} else {
++			tmpCOPYSZ(HOSTNAME);
++		}
+ 	}
+ 
+ 	tmpCOPYCSTR(ProgName);

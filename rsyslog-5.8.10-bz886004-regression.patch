@@ -1,0 +1,15 @@
+diff -up rsyslog-5.8.10/runtime/datetime.c.orig rsyslog-5.8.10/runtime/datetime.c
+--- rsyslog-5.8.10/runtime/datetime.c.orig	2012-04-05 14:10:45.000000000 +0200
++++ rsyslog-5.8.10/runtime/datetime.c	2013-01-09 17:05:57.345652317 +0100
+@@ -296,8 +296,10 @@ ParseTIMESTAMP3339(struct syslogTime *pT
+ 		if(OffsetHour < 0 || OffsetHour > 23)
+ 			ABORT_FINALIZE(RS_RET_INVLD_TIME);
+ 
+-		if(lenStr == 0 || *pszTS++ != ':')
++		if(lenStr == 0 || *pszTS != ':')
+ 			ABORT_FINALIZE(RS_RET_INVLD_TIME);
++		--lenStr;
++		pszTS++;
+ 		OffsetMinute = srSLMGParseInt32(&pszTS, &lenStr);
+ 		if(OffsetMinute < 0 || OffsetMinute > 59)
+ 			ABORT_FINALIZE(RS_RET_INVLD_TIME);

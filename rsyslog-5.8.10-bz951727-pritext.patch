@@ -1,0 +1,14 @@
+diff -up rsyslog-5.8.10/runtime/msg.c.orig rsyslog-5.8.10/runtime/msg.c
+--- rsyslog-5.8.10/runtime/msg.c.orig	2013-07-16 15:54:35.395246417 +0200
++++ rsyslog-5.8.10/runtime/msg.c	2013-07-16 15:54:56.575351438 +0200
+@@ -2230,8 +2230,8 @@ char *textpri(char *pRes, size_t pResLen
+ 	assert(pRes != NULL);
+ 	assert(pResLen > 0);
+ 
+-	snprintf(pRes, pResLen, "%s.%s<%d>", syslog_fac_names[LOG_FAC(pri)],
+-		 syslog_severity_names[LOG_PRI(pri)], pri);
++	snprintf(pRes, pResLen, "%s.%s", syslog_fac_names[LOG_FAC(pri)],
++		 syslog_severity_names[LOG_PRI(pri)]);
+ 
+ 	return pRes;
+ }

@@ -1,0 +1,32 @@
+From 49cc3c0cabdaf6234264ac6a5fed76b8e11154a4 Mon Sep 17 00:00:00 2001
+From: awedxz <awedxz@mailinator.com>
+Date: Fri, 4 Jan 2013 15:13:53 +0100
+Subject: [PATCH] Permit RFC3339 timestamp in local log socket messages
+
+Taken from upstream, commit: bfae69d68b0032a383821a54bc52aeff36a90e52
+---
+ plugins/imuxsock/imuxsock.c |    7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/plugins/imuxsock/imuxsock.c b/plugins/imuxsock/imuxsock.c
+index 5867f1c..740714e 100644
+--- a/plugins/imuxsock/imuxsock.c
++++ b/plugins/imuxsock/imuxsock.c
+@@ -575,9 +575,12 @@ SubmitMsg(uchar *pRcv, int lenRcv, lstn_t *pLstn, struct ucred *cred)
+ 		 * datestamp or not .. and advance the parse pointer accordingly.
+ 		 */
+ 		struct syslogTime dummy;
+-		datetime.ParseTIMESTAMP3164(&dummy, &parse, &lenMsg);
++		if (datetime.ParseTIMESTAMP3339(&dummy, &parse, &lenMsg) != RS_RET_OK) {
++			datetime.ParseTIMESTAMP3164(&dummy, &parse, &lenMsg);
++		}
+ 	} else {
+-		if(datetime.ParseTIMESTAMP3164(&(pMsg->tTIMESTAMP), &parse, &lenMsg) != RS_RET_OK) {
++		if(datetime.ParseTIMESTAMP3339(&(pMsg->tTIMESTAMP), &parse, &lenMsg) != RS_RET_OK &&
++		   datetime.ParseTIMESTAMP3164(&(pMsg->tTIMESTAMP), &parse, &lenMsg) != RS_RET_OK) {
+ 			DBGPRINTF("we have a problem, invalid timestamp in msg!\n");
+ 		}
+ 	}
+-- 
+1.7.10.4
+

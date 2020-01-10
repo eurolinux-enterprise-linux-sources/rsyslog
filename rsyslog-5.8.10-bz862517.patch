@@ -1,0 +1,34 @@
+From a53f5dd109c3a1772f22d22af257253e6b578fc4 Mon Sep 17 00:00:00 2001
+From: Tomas Heinrich <theinric@redhat.com>
+Date: Wed, 14 Aug 2013 17:52:05 +0200
+Subject: [PATCH] Prevent a segfault when tcpsrv fails to accept a session
+
+---
+ tcpsrv.c |   11 ++++++++---
+ 1 file changed, 8 insertions(+), 3 deletions(-)
+
+diff --git a/tcpsrv.c b/tcpsrv.c
+index 95c4578..ae57697 100644
+--- a/tcpsrv.c
++++ b/tcpsrv.c
+@@ -695,9 +695,14 @@ Run(tcpsrv_t *pThis)
+ 
+ 		if(pUsr == pThis->ppLstn) {
+ 			DBGPRINTF("New connect on NSD %p.\n", pThis->ppLstn[i]);
+-			SessAccept(pThis, pThis->ppLstnPort[i], &pNewSess, pThis->ppLstn[i]);
+-			CHKiRet(nspoll.Ctl(pPoll, pNewSess->pStrm, 0, pNewSess, NSDPOLL_IN, NSDPOLL_ADD));
+-			DBGPRINTF("New session created with NSD %p.\n", pNewSess);
++			iRet = SessAccept(pThis, pThis->ppLstnPort[i], &pNewSess, pThis->ppLstn[i]);
++			if(iRet == RS_RET_OK) {
++				CHKiRet(nspoll.Ctl(pPoll, pNewSess->pStrm, 0, pNewSess, NSDPOLL_IN, NSDPOLL_ADD));
++				DBGPRINTF("New session created with NSD %p.\n", pNewSess);
++			} else {
++				DBGPRINTF("tcpsrv: error %d during accept\n", iRet);
++			}
++			iRet = RS_RET_OK;
+ 		} else {
+ 			pNewSess = (tcps_sess_t*) pUsr;
+ 			doReceive(pThis, &pNewSess, pPoll);
+-- 
+1.7.10.4
+
