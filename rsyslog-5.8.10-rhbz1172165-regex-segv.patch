@@ -1,0 +1,38 @@
+From d3d6a160bc2d1e38beb23509386c73e4a590bd50 Mon Sep 17 00:00:00 2001
+From: Tomas Heinrich <theinric@redhat.com>
+Date: Sun, 7 Dec 2014 14:40:30 +0100
+Subject: [PATCH] Clean up the regex class before module unload
+
+The regex class object information contains pointers to static memory
+inside the external module. After the module is unloaded, these
+pointers become invalid. This should be solved by adding a class-exit
+function that calls obj.UnregisterObj() to clean up the object
+information.
+---
+ runtime/regexp.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/runtime/regexp.c b/runtime/regexp.c
+index 912db9c..12b8da0 100644
+--- a/runtime/regexp.c
++++ b/runtime/regexp.c
+@@ -75,12 +75,16 @@ BEGINAbstractObjClassInit(regexp, 1, OBJ_IS_LOADABLE_MODULE) /* class, version *
+ 	/* set our own handlers */
+ ENDObjClassInit(regexp)
+ 
++BEGINObjClassExit(regexp, OBJ_IS_LOADABLE_MODULE)
++CODESTARTObjClassExit(regexp)
++ENDObjClassExit(regexp)
+ 
+ /* --------------- here now comes the plumbing that makes as a library module --------------- */
+ 
+ 
+ BEGINmodExit
+ CODESTARTmodExit
++regexpClassExit();
+ ENDmodExit
+ 
+ 
+-- 
+1.9.3
+
