@@ -7,7 +7,7 @@
 Summary: Enhanced system logging and kernel message trapping daemons
 Name: rsyslog
 Version: 5.8.10
-Release: 8%{?dist}.1
+Release: 9%{?dist}
 License: (GPLv3+ and ASL 2.0)
 Group: System Environment/Daemons
 URL: http://www.rsyslog.com/
@@ -29,7 +29,7 @@ Patch10: rsyslog-5.8.10-bz963942-maxFileSize.patch
 Patch11: rsyslog-5.8.10-bz893197-missingHostname.patch
 Patch12: rsyslog-5.8.10-bz886117-numerical-uid.patch
 Patch13: rsyslog-5.8.10-bz862517.patch
-Patch14: rsyslog-5.8.10-rhbz1172164-regex-segv.patch
+Patch14: rsyslog-5.8.10-rhbz1142373-cve-2014-3634.patch
 BuildRequires: zlib-devel
 Requires: logrotate >= 3.5.2
 Requires: bash >= 2.0
@@ -151,10 +151,8 @@ export LDFLAGS="-pie -Wl,-z,relro -Wl,-z,now"
 		--enable-pmlastmsg \
 		--enable-relp \
 		--enable-snmp \
-		--enable-unlimited-select \
-		--with-systemdsystemunitdir=no \
-
-make V=1
+		--enable-unlimited-select
+make
 
 %install
 rm -rf $RPM_BUILD_ROOT
@@ -271,11 +269,9 @@ mv /var/lock/subsys/rsyslogd /var/lock/subsys/rsyslog
 %{_libdir}/rsyslog/omsnmp.so
 
 %changelog
-* Tue Dec 09 2014 Tomas Heinrich <theinric@redhat.com> 5.8.10-8.el6_5.1
-- add a patch to fix a segfault in the regex module
-  resolves: #1172164
-- explicitly disable systemd service file generation
-- turn on verbose make output
+* Fri Oct 10 2014 Tomas Heinrich <theinric@redhat.com> 5.8.10-9
+- fix CVE-2014-3634
+  resolves: #1149148
 
 * Wed Aug 14 2013 Tomas Heinrich <theinric@redhat.com> 5.8.10-8
 - drop patch 5 which introduced a regression
