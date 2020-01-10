@@ -7,7 +7,7 @@
 Summary: Enhanced system logging and kernel message trapping daemons
 Name: rsyslog
 Version: 5.8.10
-Release: 10%{?dist}
+Release: 12%{?dist}
 License: (GPLv3+ and ASL 2.0)
 Group: System Environment/Daemons
 URL: http://www.rsyslog.com/
@@ -30,7 +30,10 @@ Patch11: rsyslog-5.8.10-bz893197-missingHostname.patch
 Patch12: rsyslog-5.8.10-bz886117-numerical-uid.patch
 Patch13: rsyslog-5.8.10-bz862517.patch
 Patch14: rsyslog-5.8.10-rhbz1142373-cve-2014-3634.patch
-Patch15: rsyslog-5.8.10-rhbz1172165-regex-segv.patch
+Patch15: rsyslog-5.8.10-rhbz1109155-regex-segv.patch
+Patch16: rsyslog-5.8.10-rhbz1491428-DA-queue-abort.patch
+Patch17: rsyslog-5.8.10-bz1392400-man-page.patch
+
 BuildRequires: zlib-devel
 Requires: logrotate >= 3.5.2
 Requires: bash >= 2.0
@@ -131,6 +134,9 @@ ability to send syslog messages as SNMPv1 and SNMPv2c traps.
 %patch13 -p1
 %patch14 -p1
 %patch15 -p1
+
+%patch16 -p1 -b .DA-queue-abort
+%patch17 -p1 -b .man-pages
 
 %build
 # workaround for mysql_conf multilib issue, bug #694414
@@ -273,15 +279,27 @@ mv /var/lock/subsys/rsyslogd /var/lock/subsys/rsyslog
 %{_libdir}/rsyslog/omsnmp.so
 
 %changelog
-* Tue Dec 09 2014 Tomas Heinrich <theinric@redhat.com> 5.8.10-10.el6_6
+* Fri Dec 01 2017 Jiri Vymazal <jvymazal@redhat.com> 5.8.10-12
+RHEL-6.10 ERRATUM
+
+- added a patch fixing manpages
+  resolves: rhbz#1392400
+
+* Mon Nov 06 2017 Jiri Vymazal <jvymazal@redhat.com> 5.8.10-11
+RHEL-6.10 ERRATUM
+
+- add a patch fixing possible ABRT in DA queues
+  resolves: rhbz#1491428
+
+* Tue Dec 09 2014 Tomas Heinrich <theinric@redhat.com> 5.8.10-10
 - add a patch to fix a segfault in the regex module
-  resolves: #1172165
+  resolves: #1109155
 - explicitly disable systemd service file generation
 - turn on verbose make output
 
 * Fri Oct 10 2014 Tomas Heinrich <theinric@redhat.com> 5.8.10-9
 - fix CVE-2014-3634
-  resolves: #1149148
+  resolves: #1149149
 
 * Wed Aug 14 2013 Tomas Heinrich <theinric@redhat.com> 5.8.10-8
 - drop patch 5 which introduced a regression
@@ -480,7 +498,7 @@ mv /var/lock/subsys/rsyslogd /var/lock/subsys/rsyslog
 * Sat Jan 24 2009 Caolán McNamara <caolanm@redhat.com> 3.21.9-3
 - rebuild for dependencies
 
-* Tue Jan 07 2009 Tomas Heinrich <theinric@redhat.com> 3.21.9-2
+* Wed Jan 07 2009 Tomas Heinrich <theinric@redhat.com> 3.21.9-2
 - fix several legacy options handling
 - fix internal message output (#478612)
 
@@ -545,7 +563,7 @@ mv /var/lock/subsys/rsyslogd /var/lock/subsys/rsyslog
 * Fri Apr 04 2008 Peter Vrabec <pvrabec@redhat.com> 3.14.1-1
 - upgrade
 
-* Mon Mar 25 2008 Peter Vrabec <pvrabec@redhat.com> 3.12.4-1
+* Tue Mar 25 2008 Peter Vrabec <pvrabec@redhat.com> 3.12.4-1
 - upgrade
 
 * Wed Mar 19 2008 Peter Vrabec <pvrabec@redhat.com> 3.12.3-1

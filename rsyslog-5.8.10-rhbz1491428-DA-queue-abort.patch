@@ -1,0 +1,58 @@
+From 104c8a30e83db3e03ad87221cc3e288c86a37dac Mon Sep 17 00:00:00 2001
+From: Jiri Vymazal <jvymazal@redhat.com>
+Date: Mon, 06 Nov 2017 15:13:03 -0400
+Subject: [PATCH] bugfix: DA queue could cause abort
+
+Backport of:
+
+    commit 8805b0f25ff1409a41ecc2e054896e653e4cfa55
+    Author: Rainer Gerhards <rgerhards@adiscon.com>
+    Date:   Tue Jul 24 11:11:39 2012 +0200
+
+        bugfix: DA queue could cause abort
+
+        ...due to invalid mutex synchronisation in DA worker. In case of
+        idle queue, mutex was incorrectly locked.
+
+Signed-off-by: Jiri Vymazal <jvymazal@redhat.com>
+---
+ runtime/queue.c |    9 ++++++---
+ 1 files changed, 6 insertions(+), 3 deletions(-)
+
+diff --git a/runtime/queue.c b/runtime/queue.c
+index 9f31852..d28cb68 100644
+--- a/runtime/queue.c
++++ b/runtime/queue.c
+@@ -1743,6 +1743,7 @@
+ {
+ 	int i;
+ 	int iCancelStateSave;
++	int bNeedReLock = 0;    /**< do we need to lock the mutex again? */
+ 	DEFiRet;
+ 
+ 	ISOBJ_TYPE_assert(pThis, qqueue);
+@@ -1752,6 +1753,7 @@
+ 
+ 	/* we now have a non-idle batch of work, so we can release the queue mutex and process it */
+ 	d_pthread_mutex_unlock(pThis->mut);
++	bNeedReLock = 1;
+ 
+ 	/* at this spot, we may be cancelled */
+ 	pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &iCancelStateSave);
+@@ -1770,10 +1772,11 @@
+ 	/* but now cancellation is no longer permitted */
+ 	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &iCancelStateSave);
+ 
+-	/* now we are done, but need to re-aquire the mutex */
+-	d_pthread_mutex_lock(pThis->mut);
+-
+ finalize_it:
++	/* now we are done, but potentially need to re-aquire the mutex */
++	if(bNeedReLock)
++		d_pthread_mutex_lock(pThis->mut);
++
+ 	DBGOPRINT((obj_t*) pThis, "DAConsumer returns with iRet %d\n", iRet);
+ 	RETiRet;
+ }
+--
+1.7.1
