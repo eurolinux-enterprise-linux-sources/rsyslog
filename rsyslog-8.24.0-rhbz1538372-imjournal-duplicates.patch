@@ -1,10 +1,25 @@
 From: Jiri Vymazal <jvymazal@redhat.com>
-Date: Wed, 14 Mar 2018 90:05:01 -0500
+Date: Wed, 25 Jul 2018 15:05:01 -0500
 
 modification and merge of below patches for RHEL consumers, 
 also modified journal invalidate/rotation handling to keep possibility
 to continue after switch of persistent journal
 original:
+%From 3bede5ba768975c8b6fe3d1f3e11075910f52fdd Mon Sep 17 00:00:00 2001
+%From: Jiri Vymazal <jvymazal@redhat.com>
+%Date: Wed, 7 Mar 2018 11:57:29 +0100
+%Subject: [PATCH] Fetching cursor on readJournal() and simplified pollJournal()
+%
+%Fetching journal cursor in persistJournal could cause us to save
+%invalid cursor leading to duplicating messages further on, now we are
+%saving it on each readJournal() where we now that the state is good.
+%This result in simplyfing persisJournalState() a bit as well.
+%
+%pollJournal() is now cleaner and faster, correctly handles INVALIDATE
+%status from journald and is able to continue polling after journal
+%flush. Also reduced POLL_TIMEOUT a bit as it caused rsyslog to exit
+%with error in corner cases for some ppc when left at full second.
+plus
 %
 %From a99f9b4b42d261c384aee09306fc421df2cca7a5 Mon Sep 17 00:00:00 2001
 %From: Peter Portante <peter.a.portante@gmail.com>
@@ -34,11 +49,27 @@ and also:
 %
 %closes https://github.com/rsyslog/rsyslog/issues/1895
 ---
- plugins/imjournal/imjournal.c | 206 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++------------------------------------------------------------------------------------------------------
- 1 file changed, 104 insertions(+), 102 deletions(-)
+ plugins/imjournal/imjournal.c | 211 ++++++++++++++++++++++--------------------
+ 1 file changed, 110 insertions(+), 102 deletions(-)
 
 --- a/plugins/imjournal/imjournal.c
 +++ b/plugins/imjournal/imjournal.c
+@@ -80,6 +80,7 @@ static struct configSettings_s {
+ 	int iDfltFacility;
+ 	int bUseJnlPID;
+	char *dfltTag;
++	int bWorkAroundJournalBug;
+ } cs;
+ 
+ static rsRetVal facilityHdlr(uchar **pp, void *pVal);
+@@ -95,6 +96,7 @@ static struct cnfparamdescr modpdescr[] = {
+ 	{ "defaultfacility", eCmdHdlrString, 0 },
+ 	{ "usepidfromsystem", eCmdHdlrBinary, 0 },
+	{ "defaulttag", eCmdHdlrGetWord, 0 },
++	{ "workaroundjournalbug", eCmdHdlrBinary, 0 }
+ };
+ static struct cnfparamblk modpblk =
+ 	{ CNFPARAMBLK_VERSION,
 @@ -114,6 +114,10 @@ /* module-global parameters */
  static const char *pid_field_name;	/* read-only after startup */
  static ratelimit_t *ratelimiter = NULL;
@@ -81,26 +112,28 @@ and also:
  
  	const void *get;
  	const void *pidget;
-@@ -393,6 +407,12 @@ readjournal(void)
+@@ -433,6 +437,15 @@ readjournal(void)
  		tv.tv_usec = timestamp % 1000000;
  	}
  
-+        sd_journal_get_cursor(j, &c);
-+        if (c) {
-+                free(last_cursor);
-+                last_cursor = c;
-+        }
++	if (cs.bWorkAroundJournalBug) {
++		/* save journal cursor (at this point we can be sure it is valid) */
++		sd_journal_get_cursor(j, &c);
++		if (c) {
++			free(last_cursor);
++			last_cursor = c;
++		}
++	}
 +
  	/* submit message */
  	enqMsg((uchar *)message, (uchar *) sys_iden_help, facility, severity, &tv, json, 0);
  
-@@ -413,44 +433,41 @@ persistJournalState (void)
+@@ -413,44 +433,49 @@ persistJournalState (void)
  	DEFiRet;
  	FILE *sf; /* state file */
  	char tmp_sf[MAXFNAME];
 -	char *cursor;
--	int ret = 0;
-+	int r = 0;
+ 	int ret = 0;
  
 -	/* On success, sd_journal_get_cursor()  returns 1 in systemd
 -	   197 or older and 0 in systemd 198 or newer */
@@ -123,8 +156,9 @@ and also:
 -                               errmsg.LogError(0, iRet, "rename() failed: "
 -                                       "'%s', new path: '%s'\n", errStr, cs.stateFile);
 -                       }
-+	if (!last_cursor)
-+		ABORT_FINALIZE(RS_RET_OK);
++	if (cs.bWorkAroundJournalBug) {
++		if (!last_cursor)
++			ABORT_FINALIZE(RS_RET_OK);
  
 -		} else {
 -			char errStr[256];
@@ -134,11 +168,13 @@ and also:
 -			iRet = RS_RET_FOPEN_FAILURE;
 -		}
 -	} else {
--		char errStr[256];
--		rs_strerror_r(-(ret), errStr, sizeof(errStr));
--		errmsg.LogError(0, RS_RET_ERR, "sd_journal_get_cursor() failed: '%s'\n", errStr);
++	} else if ((ret = sd_journal_get_cursor(j, &last_cursor)) < 0) {
+ 		char errStr[256];
+ 		rs_strerror_r(-(ret), errStr, sizeof(errStr));
+ 		errmsg.LogError(0, RS_RET_ERR, "sd_journal_get_cursor() failed: '%s'\n", errStr);
 -		iRet = RS_RET_ERR;
--	}
++		ABORT_FINALIZE(RS_RET_ERR);
+	}
 +	/* we create a temporary name by adding a ".tmp"
 +	 * suffix to the end of our state file's name
 +	 */
@@ -150,20 +186,21 @@ and also:
 +		ABORT_FINALIZE(RS_RET_FOPEN_FAILURE);
 +	}
 +
-+	r = fprintf(sf, "%s", last_cursor);
-+	if (r < 0) {
-+		errmsg.LogError(errno, RS_RET_FOPEN_FAILURE, "imjournal: failed to save cursor to: '%s'", tmp_sf);
++	ret = fputs(last_cursor, sf);
++	if (ret < 0) {
++		errmsg.LogError(errno, RS_RET_IO_ERROR, "imjournal: failed to save cursor to: '%s'", tmp_sf);
++		ret = fclose(sf);
 +		ABORT_FINALIZE(RS_RET_IO_ERROR);
 +	}
 +
-+	r = fclose(sf);
-+	if (r < 0) {
-+		errmsg.LogError(errno, iRet, "imjournal: fclose() failed for path: '%s'", tmp_sf);
++	ret = fclose(sf);
++	if (ret < 0) {
++		errmsg.LogError(errno, RS_RET_IO_ERROR, "imjournal: fclose() failed for path: '%s'", tmp_sf);
 +		ABORT_FINALIZE(RS_RET_IO_ERROR);
 +	}
 +
-+	r = rename(tmp_sf, cs.stateFile);
-+	if (r < 0) {
++	ret = rename(tmp_sf, cs.stateFile);
++	if (ret < 0) {
 +		errmsg.LogError(errno, iRet, "imjournal: rename() failed for new path: '%s'", cs.stateFile);
 +		ABORT_FINALIZE(RS_RET_IO_ERROR);
 +	}
@@ -172,7 +209,7 @@ and also:
  	RETiRet;
  }
  
-@@ -473,64 +473,29 @@
+@@ -473,64 +473,26 @@
   * except for the special handling of EINTR.
   */
  
@@ -207,10 +244,7 @@ and also:
 -	}
 +	int r;
  
-+	for (;;) {
-+		r = sd_journal_wait(j, POLL_TIMEOUT);
-+		break;
-+	}
++	r = sd_journal_wait(j, POLL_TIMEOUT);
  
 -	jr = sd_journal_process(j);
 -	
@@ -316,3 +350,21 @@ and also:
  				persistJournalState();
  			}
  		}
+@@ -901,6 +909,8 @@ CODESTARTsetModCnf
+ 			cs.bUseJnlPID = (int) pvals[i].val.d.n;
+		} else if (!strcmp(modpblk.descr[i].name, "defaulttag")) {
+			cs.dfltTag = (char *)es_str2cstr(pvals[i].val.d.estr, NULL);
++		} else if (!strcmp(modpblk.descr[i].name, "workaroundjournalbug")) {
++			cs.bWorkAroundJournalBug = (int) pvals[i].val.d.n;
+ 		} else {
+ 			dbgprintf("imjournal: program error, non-handled "
+ 				"param '%s' in beginCnfLoad\n", modpblk.descr[i].name);
+@@ -961,6 +971,8 @@ CODEmodInit_QueryRegCFSLineHdlr
+		NULL, &cs.bUseJnlPID, STD_LOADABLE_MODULE_ID));
+	CHKiRet(omsdRegCFSLineHdlr((uchar *)"imjournaldefaulttag", 0, eCmdHdlrGetWord,
+		NULL, &cs.dfltTag, STD_LOADABLE_MODULE_ID));
++	CHKiRet(omsdRegCFSLineHdlr((uchar *)"workaroundjournalbug", 0, eCmdHdlrBinary,
++		NULL, &cs.bWorkAroundJournalBug, STD_LOADABLE_MODULE_ID));
+ ENDmodInit
+ /* vim:set ai:
+  */

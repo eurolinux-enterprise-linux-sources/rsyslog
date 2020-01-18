@@ -1,0 +1,59 @@
+From c49e42f4f8381fc8e92579c41cefb2c85fe45929 Mon Sep 17 00:00:00 2001
+From: Rainer Gerhards <rgerhards@adiscon.com>
+Date: Tue, 7 Feb 2017 13:09:40 +0100
+Subject: [PATCH] core: fix sequence error in msg object deserializer
+
+Corruption of disk queue (or disk part of DA queue) always happens if
+the "json" property (message variables) is present and "structured-data"
+property is also present. This causes rsyslog to serialize to the
+queue in wrong property sequence, which will lead to error -2308 on
+deserialization.
+
+Seems to be a long-standing bug. Depending on version used, some or
+all messages in disk queue may be lost.
+
+closes https://github.com/rsyslog/rsyslog/issues/1404
+---
+ runtime/msg.c | 14 ++++++++------
+ 1 file changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/runtime/msg.c b/runtime/msg.c
+index 7cfeca843..cfa95517e 100644
+--- a/runtime/msg.c
++++ b/runtime/msg.c
+@@ -1350,6 +1350,11 @@ MsgDeserialize(smsg_t * const pMsg, strm_t *pStrm)
+ 		reinitVar(pVar);
+ 		CHKiRet(objDeserializeProperty(pVar, pStrm));
+ 	}
++	if(isProp("pszStrucData")) {
++		MsgSetStructuredData(pMsg, (char*) rsCStrGetSzStrNoNULL(pVar->val.pStr));
++		reinitVar(pVar);
++		CHKiRet(objDeserializeProperty(pVar, pStrm));
++	}
+ 	if(isProp("json")) {
+ 		tokener = json_tokener_new();
+ 		pMsg->json = json_tokener_parse_ex(tokener, (char*)rsCStrGetSzStrNoNULL(pVar->val.pStr),
+@@ -1366,11 +1371,6 @@ MsgDeserialize(smsg_t * const pMsg, strm_t *pStrm)
+ 		reinitVar(pVar);
+ 		CHKiRet(objDeserializeProperty(pVar, pStrm));
+ 	}
+-	if(isProp("pszStrucData")) {
+-		MsgSetStructuredData(pMsg, (char*) rsCStrGetSzStrNoNULL(pVar->val.pStr));
+-		reinitVar(pVar);
+-		CHKiRet(objDeserializeProperty(pVar, pStrm));
+-	}
+ 	if(isProp("pCSAPPNAME")) {
+ 		MsgSetAPPNAME(pMsg, (char*) rsCStrGetSzStrNoNULL(pVar->val.pStr));
+ 		reinitVar(pVar);
+@@ -1401,8 +1401,10 @@ MsgDeserialize(smsg_t * const pMsg, strm_t *pStrm)
+ 	 * but on the other hand it works decently AND we will probably replace
+ 	 * the whole persisted format soon in any case. -- rgerhards, 2012-11-06
+ 	 */
+-	if(!isProp("offMSG"))
++	if(!isProp("offMSG")) {
++		DBGPRINTF("error property: %s\n", rsCStrGetSzStrNoNULL(pVar->pcsName));
+ 		ABORT_FINALIZE(RS_RET_DS_PROP_SEQ_ERR);
++	}
+ 	MsgSetMSGoffs(pMsg, pVar->val.num);
+ finalize_it:
+ 	if(pVar != NULL)

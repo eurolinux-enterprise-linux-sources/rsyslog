@@ -1,0 +1,30 @@
+diff --git a/tools/rsyslogd.8 b/tools/rsyslogd.8
+index 77d0f97..d9a2e32 100644
+--- a/tools/rsyslogd.8
++++ b/tools/rsyslogd.8
+@@ -127,14 +127,14 @@ reacts to a set of signals.  You may easily send a signal to
+ using the following:
+ .IP
+ .nf
+-kill -SIGNAL $(cat /var/run/rsyslogd.pid)
++kill -SIGNAL $(cat /var/run/syslogd.pid)
+ .fi
+ .PP
+ Note that -SIGNAL must be replaced with the actual signal
+ you are trying to send, e.g. with HUP. So it then becomes:
+ .IP
+ .nf
+-kill -HUP $(cat /var/run/rsyslogd.pid)
++kill -HUP $(cat /var/run/syslogd.pid)
+ .fi
+ .PP
+ .TP
+@@ -215,7 +215,7 @@ for exact information.
+ .I /dev/log
+ The Unix domain socket to from where local syslog messages are read.
+ .TP
+-.I /var/run/rsyslogd.pid
++.I /var/run/syslogd.pid
+ The file containing the process id of 
+ .BR rsyslogd .
+ .TP

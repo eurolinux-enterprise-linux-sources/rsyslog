@@ -1,0 +1,14 @@
+diff -up ./runtime/stream.c.fix ./runtime/stream.c
+--- ./runtime/stream.c.fix	2018-06-25 17:39:39.223082288 +0200
++++ ./runtime/stream.c	2018-06-25 17:40:26.549846798 +0200
+@@ -1427,10 +1427,8 @@ asyncWriterThread(void *pPtr)
+ 			}
+ 			if(bTimedOut && pThis->iBufPtr > 0) {
+ 				/* if we timed out, we need to flush pending data */
+-				d_pthread_mutex_unlock(&pThis->mut);
+ 				strmFlushInternal(pThis, 1);
+ 				bTimedOut = 0;
+-				d_pthread_mutex_lock(&pThis->mut); 
+ 				continue;
+ 			}
+ 			bTimedOut = 0;

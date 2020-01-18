@@ -14,10 +14,9 @@
 Summary: Enhanced system logging and kernel message trapping daemon
 Name: rsyslog
 Version: 8.24.0
-Release: 16%{?dist}.4
+Release: 34%{?dist}
 License: (GPLv3+ and ASL 2.0)
 Group: System Environment/Daemons
-ExcludeArch: i686 ppc s390
 URL: http://www.rsyslog.com/
 Source0: http://www.rsyslog.com/files/download/rsyslog/%{name}-%{version}.tar.gz
 Source1: http://www.rsyslog.com/files/download/rsyslog/%{name}-doc-%{version}.tar.gz
@@ -63,7 +62,7 @@ Patch7: rsyslog-8.24.0-rhbz1401870-watermark.patch
 
 Patch8: rsyslog-8.24.0-rhbz1403831-missing-cmd-line-switches.patch
 Patch9: rsyslog-8.24.0-rhbz1245194-imjournal-ste-file.patch
-Patch10: rsyslog-8.24.0-rhbz1507028-recover_qi-doc.patch
+Patch10: rsyslog-8.24.0-doc-rhbz1507028-recover_qi.patch
 Patch11: rsyslog-8.24.0-rhbz1088021-systemd-time-backwards.patch
 Patch12: rsyslog-8.24.0-rhbz1403907-imudp-deprecated-parameter.patch
 Patch13: rsyslog-8.24.0-rhbz1196230-ratelimit-add-source.patch
@@ -81,13 +80,29 @@ Patch21: rsyslog-8.24.0-rhbz1431616-pmrfc3164sd-backport.patch
 Patch22: rsyslog-8.24.0-rhbz1056548-getaddrinfo.patch
 
 Patch23: rsyslog-8.24.0-rhbz1401456-sd-service-network.patch
-Patch24: rsyslog-8.24.0-rhbz1459896-queues-defaults-doc.patch
+Patch24: rsyslog-8.24.0-doc-rhbz1459896-queues-defaults.patch
 Patch25: rsyslog-8.24.0-rhbz1497985-journal-reloaded-message.patch
 Patch26: rsyslog-8.24.0-rhbz1462160-set.statement-crash.patch
 Patch27: rsyslog-8.24.0-rhbz1488186-fixed-nullptr-check.patch
 Patch28: rsyslog-8.24.0-rhbz1505103-omrelp-rebindinterval.patch
 
-Patch29: rsyslog-8.24.0-rhbz1545582-imjournal-duplicates.patch
+Patch29: rsyslog-8.24.0-rhbz1538372-imjournal-duplicates.patch
+Patch30: rsyslog-8.24.0-rhbz1511485-deserialize-property-name.patch
+
+Patch31: rsyslog-8.24.0-rhbz1512551-caching-sockaddr.patch
+Patch32: rsyslog-8.24.0-rhbz1531295-imfile-rewrite-with-symlink.patch
+Patch33: rsyslog-8.24.0-rhbz1582517-buffer-overflow-memcpy-in-parser.patch
+Patch34: rsyslog-8.24.0-rhbz1591819-msg-loss-shutdown.patch
+Patch35: rsyslog-8.24.0-rhbz1539193-mmkubernetes-new-plugin.patch
+Patch36: rsyslog-8.24.0-rhbz1507145-omelastic-client-cert.patch
+Patch37: rsyslog-8.24.0-doc-rhbz1507145-omelastic-client-cert-and-config.patch
+Patch38: rsyslog-8.24.0-rhbz1565214-omelasticsearch-replace-cJSON-with-libfastjson.patch
+Patch39: rsyslog-8.24.0-rhbz1565214-omelasticsearch-write-op-types-bulk-rejection-retries.patch
+Patch40: rsyslog-8.24.0-doc-rhbz1539193-mmkubernetes-new-plugin.patch
+Patch41: rsyslog-8.24.0-doc-rhbz1538372-imjournal-duplicates.patch
+Patch42: rsyslog-8.24.0-rhbz1597264-man-page-fix.patch
+Patch43: rsyslog-8.24.0-rhbz1559408-async-writer.patch
+Patch44: rsyslog-8.24.0-rhbz1600462-wrktable-realloc-null.patch
 
 %package crypto
 Summary: Encryption support
@@ -124,7 +139,8 @@ Requires: %name = %version-%release
 Summary: Log normalization support for rsyslog
 Group: System Environment/Daemons
 Requires: %name = %version-%release
-BuildRequires: libee-devel liblognorm-devel
+BuildRequires: libee-devel
+BuildRequires: liblognorm-devel
 
 %package mmaudit
 Summary: Message modification module supporting Linux audit format
@@ -201,6 +217,18 @@ Summary: Provides the omudpspoof module
 Group: System Environment/Daemons
 Requires: %name = %version-%release
 BuildRequires: libnet-devel
+
+%package kafka
+Summary: Provides kafka support for rsyslog
+Group: System Environment/Daemons
+Requires: %name = %version-%release
+BuildRequires: librdkafka-devel
+
+%package mmkubernetes
+Summary: Provides the mmkubernetes module
+Group: System Environment/Daemons
+Requires: %name = %version-%release
+BuildRequires: libcurl-devel
 
 %description
 Rsyslog is an enhanced, multi-threaded syslog daemon. It supports MySQL,
@@ -289,12 +317,22 @@ This module is similar to the regular UDP forwarder, but permits to
 spoof the sender address. Also, it enables to circle through a number
 of source ports.
 
+%description kafka
+The rsyslog-kafka package provides module for Apache Kafka output.
+
+%description mmkubernetes
+The rsyslog-mmkubernetes package provides module for adding kubernetes 
+container metadata. 
+
 %prep
 # set up rsyslog-doc sources
 %setup -q -a 1 -T -c
 %patch4 -p1 
 %patch10 -p1
 %patch24 -p1
+%patch37 -p1
+%patch40 -p1
+%patch41 -p1
 #regenerate the docs
 mv build/searchindex.js searchindex_backup.js
 sphinx-build -b html source build
@@ -334,13 +372,29 @@ mv build doc
 %patch22 -p1 -b .getaddrinfo
 
 %patch23 -p1 -b .sd-service-network
-#%%patch24 is applied right after doc setup
+#%patch24 is applied right after doc setup
 %patch25 -p1 -b .journal-reloaded
 %patch26 -p1 -b .set-statement-crash
 %patch27 -p1 -b .nullptr-check
 %patch28 -p1 -b .rebindinterval
 
 %patch29 -p1 -b .imjournal-duplicates
+%patch30 -p1 -b .property-deserialize
+
+%patch31 -p1 -b .caching-sockaddr
+%patch32 -p1 -b .imfile-symlink
+%patch33 -p1 -b .buffer-overflow
+%patch34 -p1 -b .msg-loss-shutdown
+%patch35 -p1 -b .kubernetes-metadata
+%patch36 -p1 -b .omelasticsearch-cert
+#%patch37 is applied right after doc setup
+%patch38 -p1 -b .omelasticsearch-libfastjson
+%patch39 -p1 -b .omelasticsearch-bulk-rejection
+#%patch40 is applied right after doc setup
+#%patch41 is applied right after doc setup
+%patch42 -p1 -b .manpage
+%patch43 -p1 -b .async-writer
+%patch44 -p1 -b .null-realloc-chk
 
 autoreconf 
 
@@ -359,6 +413,7 @@ export LDFLAGS="-pie -Wl,-z,relro -Wl,-z,now"
 export HIREDIS_CFLAGS=-I/usr/include/hiredis
 export HIREDIS_LIBS=-L%{_libdir}
 %endif
+sed -i 's/%{version}/%{version}-%{release}/g' configure.ac
 %configure \
 	--prefix=/usr \
 	--disable-static \
@@ -382,6 +437,7 @@ export HIREDIS_LIBS=-L%{_libdir}
 	--enable-mmnormalize \
 	--enable-mmsnmptrapd \
 	--enable-mmutf8fix \
+	--enable-mmkubernetes \
 	--enable-mysql \
 %if %{want_hiredis}
 	--enable-omhiredis \
@@ -398,6 +454,7 @@ export HIREDIS_LIBS=-L%{_libdir}
 	--enable-omstdout \
 	--enable-omudpspoof \
 	--enable-omuxsock \
+	--enable-omkafka \
 	--enable-pgsql \
 	--enable-pmaixforwardedfrom \
 	--enable-pmcisconames \
@@ -590,11 +647,156 @@ done
 %defattr(-,root,root)
 %{_libdir}/rsyslog/omudpspoof.so
 
+%files kafka
+%{_libdir}/rsyslog/omkafka.so
+
+%files mmkubernetes
+%{_libdir}/rsyslog/mmkubernetes.so
+
 %changelog
-* Mon Apr 16 2018 Jiri Vymazal <jvymazal@redhat.com> - 8.24.0-16.5
-RHEL 7.5.z ERRATUM
-- fixed imjournal duplicating msgs under some conditions
-  resolves: rhbz#1545582
+* Tue Aug 07 2018 Jiri Vymazal <jvymazal@redhat.com> - 8.24.0-34
+RHEL 7.6 ERRATUM
+- updated imfile rewrite patch with parent name bugfix
+  resolves: rhbz#1531295
+
+* Tue Aug 07 2018 Jiri Vymazal <jvymazal@redhat.com> - 8.24.0-33
+RHEL 7.6 ERRATUM
+- updated imfile rewrite patch with extended symlink watching
+  resolves: rhbz#1531295
+- updated mmkubernetes patch to accept dots in pod name
+  resolves: rhbz#1539193
+
+* Fri Aug 03 2018 Jiri Vymazal <jvymazal@redhat.com> - 8.24.0-32
+RHEL 7.6 ERRATUM
+- updated imfile rewrite patch with no log on EACCES
+  resolves: rhbz#1531295
+- removed now needless build-deps
+
+* Mon Jul 30 2018 Jiri Vymazal <jvymazal@redhat.com> - 8.24.0-31
+RHEL 7.6 ERRATUM
+- added new patch fixing ompipe dropping messages when pipe full
+  resolves: rhbz#1591819
+- updated mmkubernetes patch to accept non-kubernetes containers
+  resolves: rhbz#1539193
+  resolves: rhbz#1609023
+- removed json-parsing patches as the bug is now fixed in liblognorm
+
+* Wed Jul 25 2018 Jiri Vymazal <jvymazal@redhat.com> - 8.24.0-30
+RHEL 7.6 ERRATUM
+- updated imfile rewrite patch with next bugfix
+  resolves: rhbz#1531295
+- updated imjournal duplicates patch making slower code optional
+  and added corresponding doc patch
+  resolves: rhbz#1538372
+
+* Mon Jul 23 2018 Jiri Vymazal <jvymazal@redhat.com> - 8.24.0-29
+RHEL 7.6 ERRATUM
+- updated imfile rewrite patch with another bugfix
+  resolves: rhbz#1531295
+
+* Fri Jul 20 2018 Jiri Vymazal <jvymazal@redhat.com> - 8.24.0-28
+RHEL 7.6 ERRATUM
+- updated imfile rewrite patch fixing next round of regressions
+  resolves: rhbz#1531295
+  resolves: rhbz#1602156
+- updated mmkubernetes patch with NULL ret-check
+  resolves: rhbz#1539193
+
+* Tue Jul 17 2018 Jiri Vymazal <jvymazal@redhat.com> - 8.24.0-27
+RHEL 7.6 ERRATUM
+- updated imfile rewrite patch fixing last update regressions
+  resolves: rhbz#1531295
+- added patch fixing deadlock in async logging
+  resolves: rhbz#1559408
+- added patch fixing NULL access in worktable create
+  resolves: rhbz#1600462
+- now putting release number into configure to have it present
+  in error messages
+
+* Mon Jul 09 2018 Jiri Vymazal <jvymazal@redhat.com> - 8.24.0-26
+RHEL 7.6 ERRATUM
+- updated imfile rewrite patch according to early testing
+  resolves: rhbz#1531295
+- added patch fixing pid file name in manpage
+  resolves: rhbz#1597264
+- updated json-parsing patch with one more bugfix
+  resolves: rhbz#1565219
+
+* Fri Jun 29 2018 Jiri Vymazal <jvymazal@redhat.com> - 8.24.0-24
+RHEL 7.6 ERRATUM
+- updated imfile rewrite patch with fixes from covscan
+  resolves: rhbz#1531295
+- updated mmkubernetes patch with fixes from covscan
+  resolves: rhbz#1539193
+- updated imjournal duplicates patch with fixes from covscan
+  resolves: rhbz#1538372
+- updated omelastic enhancement patch with fixes from covscan
+  resolves: rhbz#1565214
+
+* Wed Jun 27 2018 Jiri Vymazal <jvymazal@redhat.com> - 8.24.0-23
+RHEL 7.6 ERRATUM
+- added backport of leading $ support to json-parsing patch
+  resolves: rhbz#1565219
+- The required info is already contained in rsyslog-doc package
+  so there is no patch for this one
+  resolves: rhbz#1553700
+
+* Tue Jun 26 2018 Jiri Vymazal <jvymazal@redhat.com> - 8.24.0-22
+RHEL 7.6 ERRATUM
+- edited patch for top-level json parsing with bugfix
+  resolves: rhbz#1565219
+- renamed doc patches and added/updated new ones for mmkubernetes
+  omelasticsearch and json parsing
+- renamed patch fixing buffer overflow in parser - memcpy()
+  resolves: rhbz#1582517
+
+* Mon Jun 25 2018 Jiri Vymazal <jvymazal@redhat.com> - 8.24.0-21
+RHEL 7.6 ERRATUM
+- fixed imfile rewrite backport patch, added few more bugfixes
+  resolves: rhbz#1531295
+- added also doc patch for omelastic client certs
+  resolves: rhbz#1507145
+- cleaned and shortened patch for omelastic error handling
+  resolves: rhbz#1565214
+- enabled patch for json top-level parsing
+  resolves: rhbz#1565219
+- merged mmkubernetes patches into one and enabled the module
+  resolves: rhbz#1539193
+  resolves: rhbz#1589924
+  resolves: rhbz#1590582
+
+* Sun Jun 24 2018 Noriko Hosoi <nhosoi@redhat.com> - 8.24.0-21
+RHEL 7.6 ERRATUM
+resolves: rhbz#1582517 - Buffer overflow in memcpy() in parser.c
+resolves: rhbz#1539193 - RFE: Support for mm kubernetes plugin
+resolves: rhbz#1589924 - RFE: Several fixes for mmkubernetes
+resolves: rhbz#1590582 - mmkubernetes - use version=2 in rulebase files to avoid memory leak
+resolves: rhbz#1507145 - RFE: omelasticsearch support client cert authentication
+resolves: rhbz#1565214 - omelasticsearch needs better handling for bulk index rejections and other errors
+Disables Patch32: rsyslog-8.24.0-rhbz1531295-imfile-rewrite-with-symlink.patch
+Disables Patch34: rsyslog-8.24.0-rhbz1565219-parse-json-into-top-level-fields-in-mess.patch; It BuildRequires/Requires: libfastjson >= 0.99.4-3
+
+* Fri Jun 01 2018 Jiri Vymazal <jvymazal@redhat.com> - 8.24.0-20
+RHEL 7.6 ERRATUM
+- added a patch backporting imfile module rewrite and 
+  adding symlink support
+	resolves: rhbz#1531295
+
+* Tue May 29 2018 Jiri Vymazal <jvymazal@redhat.com> - 8.24.0-19
+RHEL 7.6 ERRATUM
+- added new kafka sub-package with enabling of omkafka module
+  resolves: rhbz#1482819
+
+* Thu May 17 2018 Radovan Sroka <rsroka@redhat.com> - 8.24.0-18
+- caching the whole sockaddr structure instead of sin_addr causing memory leak
+  resolves: rhbz#1512551
+
+* Fri Apr 27 2018 Jiri Vymazal <jvymazal@redhat.com> - 8.24.0-17
+RHEL 7.6 ERRATUM
+- fixed imjournal duplicating messages on log rotation
+  resolves: rhbz#1538372
+- re-enabled 32-bit arches to not break dependent packages
+  resolves: rhbz#1571850
 
 * Thu Nov 09 2017 Jiri Vymazal <jvymazal@redhat.com> - 8.24.0-16
 RHEL 7.5 ERRATUM

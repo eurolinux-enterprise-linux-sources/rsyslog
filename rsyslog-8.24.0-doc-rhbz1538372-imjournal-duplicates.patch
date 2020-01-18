@@ -1,0 +1,28 @@
+From 1dbb68f3dc5c7ae94bdea5ad37296cbc2224e92b Mon Sep 17 00:00:00 2001
+From: Jiri Vymazal <jvymazal@redhat.com>
+Date: Wed, 25 Jul 2018 14:24:57 +0200
+Subject: [PATCH] Added WorkAroundJournalBug parameter
+
+this is documentation for rsyslog/rsyslog#2543
+---
+ source/configuration/modules/imjournal.rst | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/source/configuration/modules/imjournal.rst b/source/configuration/modules/imjournal.rst
+index 2530ddfe..85ca9e7d 100644
+--- a/source/configuration/modules/imjournal.rst
++++ b/source/configuration/modules/imjournal.rst
+@@ -99,6 +99,13 @@ -  **usepidfromsystem** [**off**/on]
+    Retrieves the trusted systemd parameter, _PID, instead of the user 
+    systemd parameter, SYSLOG_PID, which is the default.
+ 
++-  **WorkAroundJournalBug** [**off**/on]
++
++    When journald instance rotates its files it is possible that duplicate records 
++    appear in rsyslog. If you turn on this option imjournal will keep track of cursor
++    with each message to work around this problem. Be aware that in some cases this
++    might result in imjournal performance hit.
++
+ **Caveats/Known Bugs:**
+ 
+ - As stated above, a corrupted systemd journal database can cause major

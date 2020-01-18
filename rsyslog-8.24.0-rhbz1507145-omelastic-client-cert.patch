@@ -1,0 +1,208 @@
+From 02772eb5f28b3c3a98f0d739b6210ca82d58f7ee Mon Sep 17 00:00:00 2001
+From: Rich Megginson <rmeggins@redhat.com>
+Date: Thu, 8 Feb 2018 18:13:13 -0700
+Subject: [PATCH] omelasticsearch - add support for CA cert, client cert auth
+
+This allows omelasticsearch to perform client cert based authentication
+to Elasticsearch.
+Add the following parameters:
+`tls.cacert` - Full path and filename of the file containing the CA cert
+               for the CA that issued the Elasticsearch server(s) cert(s)
+`tls.mycert` - Full path and filename of the file containing the client
+               cert used to authenticate to Elasticsearch
+`tls.myprivkey` - Full path and filename of the file containing the client
+                  key used to authenticate to Elasticsearch
+---
+ plugins/omelasticsearch/omelasticsearch.c | 79 ++++++++++++++++++++++++++++---
+ 1 file changed, 73 insertions(+), 6 deletions(-)
+
+diff --git a/plugins/omelasticsearch/omelasticsearch.c b/plugins/omelasticsearch/omelasticsearch.c
+index 97d8fb233..88bd5e16c 100644
+--- a/plugins/omelasticsearch/omelasticsearch.c
++++ b/plugins/omelasticsearch/omelasticsearch.c
+@@ -110,6 +110,9 @@ typedef struct _instanceData {
+ 	size_t maxbytes;
+ 	sbool useHttps;
+ 	sbool allowUnsignedCerts;
++	uchar *caCertFile;
++	uchar *myCertFile;
++	uchar *myPrivKeyFile;
+ } instanceData;
+ 
+ typedef struct wrkrInstanceData {
+@@ -154,7 +157,10 @@ static struct cnfparamdescr actpdescr[] = {
+ 	{ "template", eCmdHdlrGetWord, 0 },
+ 	{ "dynbulkid", eCmdHdlrBinary, 0 },
+ 	{ "bulkid", eCmdHdlrGetWord, 0 },
+-	{ "allowunsignedcerts", eCmdHdlrBinary, 0 }
++	{ "allowunsignedcerts", eCmdHdlrBinary, 0 },
++	{ "tls.cacert", eCmdHdlrString, 0 },
++	{ "tls.mycert", eCmdHdlrString, 0 },
++	{ "tls.myprivkey", eCmdHdlrString, 0 }
+ };
+ static struct cnfparamblk actpblk =
+ 	{ CNFPARAMBLK_VERSION,
+@@ -168,6 +174,9 @@ BEGINcreateInstance
+ CODESTARTcreateInstance
+ 	pData->fdErrFile = -1;
+ 	pthread_mutex_init(&pData->mutErrFile, NULL);
++	pData->caCertFile = NULL;
++	pData->myCertFile = NULL;
++	pData->myPrivKeyFile = NULL;
+ ENDcreateInstance
+ 
+ BEGINcreateWrkrInstance
+@@ -216,6 +225,9 @@ CODESTARTfreeInstance
+ 	free(pData->timeout);
+ 	free(pData->errorFile);
+ 	free(pData->bulkId);
++	free(pData->caCertFile);
++	free(pData->myCertFile);
++	free(pData->myPrivKeyFile);
+ ENDfreeInstance
+ 
+ BEGINfreeWrkrInstance
+@@ -270,6 +282,9 @@ CODESTARTdbgPrintInstInfo
+ 	dbgprintf("\tinterleaved=%d\n", pData->interleaved);
+ 	dbgprintf("\tdynbulkid=%d\n", pData->dynBulkId);
+ 	dbgprintf("\tbulkid='%s'\n", pData->bulkId);
++	dbgprintf("\ttls.cacert='%s'\n", pData->caCertFile);
++	dbgprintf("\ttls.mycert='%s'\n", pData->myCertFile);
++	dbgprintf("\ttls.myprivkey='%s'\n", pData->myPrivKeyFile);
+ ENDdbgPrintInstInfo
+ 
+ 
+@@ -311,7 +326,7 @@ computeBaseUrl(const char*const serverParam,
+ 		r = useHttps ? es_addBuf(&urlBuf, SCHEME_HTTPS, sizeof(SCHEME_HTTPS)-1) :
+ 			es_addBuf(&urlBuf, SCHEME_HTTP, sizeof(SCHEME_HTTP)-1);
+ 
+-	if (r == 0) r = es_addBuf(&urlBuf, serverParam, strlen(serverParam));
++	if (r == 0) r = es_addBuf(&urlBuf, (char *)serverParam, strlen(serverParam));
+ 	if (r == 0 && !strchr(host, ':')) {
+ 		snprintf(portBuf, sizeof(portBuf), ":%d", defaultPort);
+ 		r = es_addBuf(&urlBuf, portBuf, strlen(portBuf));
+@@ -1296,7 +1311,7 @@ finalize_it:
+ }
+ 
+ static void
+-curlCheckConnSetup(CURL *handle, HEADER *header, long timeout, sbool allowUnsignedCerts)
++curlCheckConnSetup(CURL *handle, HEADER *header, long timeout, sbool allowUnsignedCerts, wrkrInstanceData_t *pWrkrData)
+ {
+ 	curl_easy_setopt(handle, CURLOPT_HTTPHEADER, header);
+ 	curl_easy_setopt(handle, CURLOPT_NOBODY, TRUE);
+@@ -1305,13 +1320,21 @@ curlCheckConnSetup(CURL *handle, HEADER *header, long timeout, sbool allowUnsign
+ 
+ 	if(allowUnsignedCerts)
+ 		curl_easy_setopt(handle, CURLOPT_SSL_VERIFYPEER, FALSE);
++	if(pWrkrData->pData->caCertFile)
++		curl_easy_setopt(handle, CURLOPT_CAINFO, pWrkrData->pData->caCertFile);
++	if(pWrkrData->pData->myCertFile)
++		curl_easy_setopt(handle, CURLOPT_SSLCERT, pWrkrData->pData->myCertFile);
++	if(pWrkrData->pData->myPrivKeyFile)
++		curl_easy_setopt(handle, CURLOPT_SSLKEY, pWrkrData->pData->myPrivKeyFile);
++	/* uncomment for in-dept debuggung:
++	curl_easy_setopt(handle, CURLOPT_VERBOSE, TRUE); */
+ 
+ 	/* Only enable for debugging
+ 	curl_easy_setopt(curl, CURLOPT_VERBOSE, TRUE); */
+ }
+ 
+ static void
+-curlPostSetup(CURL *handle, HEADER *header, uchar* authBuf)
++curlPostSetup(CURL *handle, HEADER *header, uchar* authBuf, wrkrInstanceData_t *pWrkrData)
+ {
+ 	curl_easy_setopt(handle, CURLOPT_HTTPHEADER, header);
+ 	curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, curlResult);
+@@ -1322,6 +1345,12 @@ curlPostSetup(CURL *handle, HEADER *header, uchar* authBuf)
+ 		curl_easy_setopt(handle, CURLOPT_USERPWD, authBuf);
+ 		curl_easy_setopt(handle, CURLOPT_PROXYAUTH, CURLAUTH_ANY);
+ 	}
++	if(pWrkrData->pData->caCertFile)
++		curl_easy_setopt(handle, CURLOPT_CAINFO, pWrkrData->pData->caCertFile);
++	if(pWrkrData->pData->myCertFile)
++		curl_easy_setopt(handle, CURLOPT_SSLCERT, pWrkrData->pData->myCertFile);
++	if(pWrkrData->pData->myPrivKeyFile)
++		curl_easy_setopt(handle, CURLOPT_SSLKEY, pWrkrData->pData->myPrivKeyFile);
+ }
+ 
+ static rsRetVal
+@@ -1332,7 +1361,7 @@ curlSetup(wrkrInstanceData_t *pWrkrData, instanceData *pData)
+ 	if (pWrkrData->curlPostHandle == NULL) {
+ 		return RS_RET_OBJ_CREATION_FAILED;
+ 	}
+-	curlPostSetup(pWrkrData->curlPostHandle, pWrkrData->curlHeader, pData->authBuf);
++	curlPostSetup(pWrkrData->curlPostHandle, pWrkrData->curlHeader, pData->authBuf, pWrkrData);
+ 
+ 	pWrkrData->curlCheckConnHandle = curl_easy_init();
+ 	if (pWrkrData->curlCheckConnHandle == NULL) {
+@@ -1341,7 +1370,7 @@ curlSetup(wrkrInstanceData_t *pWrkrData, instanceData *pData)
+ 		return RS_RET_OBJ_CREATION_FAILED;
+ 	}
+ 	curlCheckConnSetup(pWrkrData->curlCheckConnHandle, pWrkrData->curlHeader,
+-		pData->healthCheckTimeout, pData->allowUnsignedCerts);
++		pData->healthCheckTimeout, pData->allowUnsignedCerts, pWrkrData);
+ 
+ 	return RS_RET_OK;
+ }
+@@ -1372,6 +1401,9 @@ setInstParamDefaults(instanceData *pData)
+ 	pData->interleaved=0;
+ 	pData->dynBulkId= 0;
+ 	pData->bulkId = NULL;
++	pData->caCertFile = NULL;
++	pData->myCertFile = NULL;
++	pData->myPrivKeyFile = NULL;
+ }
+ 
+ BEGINnewActInst
+@@ -1380,6 +1412,8 @@ BEGINnewActInst
+ 	struct cnfarray* servers = NULL;
+ 	int i;
+ 	int iNumTpls;
++	FILE *fp;
++	char errStr[1024];
+ CODESTARTnewActInst
+ 	if((pvals = nvlstGetParams(lst, &actpblk, NULL)) == NULL) {
+ 		ABORT_FINALIZE(RS_RET_MISSING_CNFPARAMS);
+@@ -1435,6 +1469,39 @@ CODESTARTnewActInst
+ 			pData->dynBulkId = pvals[i].val.d.n;
+ 		} else if(!strcmp(actpblk.descr[i].name, "bulkid")) {
+ 			pData->bulkId = (uchar*)es_str2cstr(pvals[i].val.d.estr, NULL);
++		} else if(!strcmp(actpblk.descr[i].name, "tls.cacert")) {
++			pData->caCertFile = (uchar*)es_str2cstr(pvals[i].val.d.estr, NULL);
++			fp = fopen((const char*)pData->caCertFile, "r");
++			if(fp == NULL) {
++				rs_strerror_r(errno, errStr, sizeof(errStr));
++				errmsg.LogError(0, RS_RET_NO_FILE_ACCESS,
++						"error: 'tls.cacert' file %s couldn't be accessed: %s\n",
++						pData->caCertFile, errStr);
++			} else {
++				fclose(fp);
++			}
++		} else if(!strcmp(actpblk.descr[i].name, "tls.mycert")) {
++			pData->myCertFile = (uchar*)es_str2cstr(pvals[i].val.d.estr, NULL);
++			fp = fopen((const char*)pData->myCertFile, "r");
++			if(fp == NULL) {
++				rs_strerror_r(errno, errStr, sizeof(errStr));
++				errmsg.LogError(0, RS_RET_NO_FILE_ACCESS,
++						"error: 'tls.mycert' file %s couldn't be accessed: %s\n",
++						pData->myCertFile, errStr);
++			} else {
++				fclose(fp);
++			}
++		} else if(!strcmp(actpblk.descr[i].name, "tls.myprivkey")) {
++			pData->myPrivKeyFile = (uchar*)es_str2cstr(pvals[i].val.d.estr, NULL);
++			fp = fopen((const char*)pData->myPrivKeyFile, "r");
++			if(fp == NULL) {
++				rs_strerror_r(errno, errStr, sizeof(errStr));
++				errmsg.LogError(0, RS_RET_NO_FILE_ACCESS,
++						"error: 'tls.myprivkey' file %s couldn't be accessed: %s\n",
++						pData->myPrivKeyFile, errStr);
++			} else {
++				fclose(fp);
++			}
+ 		} else {
+ 			dbgprintf("omelasticsearch: program error, non-handled "
+ 			  "param '%s'\n", actpblk.descr[i].name);
+-- 
+2.14.3
+

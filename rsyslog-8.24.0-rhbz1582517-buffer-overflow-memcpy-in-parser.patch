@@ -1,0 +1,46 @@
+From cc3098b63174b8aa875d1f2e9c6ea94407b211b8 Mon Sep 17 00:00:00 2001
+From: Rainer Gerhards <rgerhards@adiscon.com>
+Date: Thu, 16 Feb 2017 19:02:36 +0100
+Subject: [PATCH 04/11] Bug 1582517 - rsyslog: Buffer overflow in memcpy() in parser.c
+
+core: fix potential misadressing in parser message sanitizer
+
+misadressing could happen when an oversize message made it to the
+sanitizer AND contained a control character in the oversize part
+of the message. Note that it is an error in itself that such an
+oversize message enters the system, but we harden the sanitizer
+to handle this gracefully (it will truncate the message).
+
+Note that truncation may still - as previously - happen if the
+number of escape characters makes the string grow above the max
+message size.
+
+(cherry picked from commit 20f8237870eb5e971fa068e4dd4d296f1dbef329)
+---
+ runtime/parser.c | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/runtime/parser.c b/runtime/parser.c
+index 0574d982a..9645baa40 100644
+--- a/runtime/parser.c
++++ b/runtime/parser.c
+@@ -464,9 +464,15 @@ SanitizeMsg(smsg_t *pMsg)
+ 	if(maxDest < sizeof(szSanBuf))
+ 		pDst = szSanBuf;
+ 	else 
+-		CHKmalloc(pDst = MALLOC(iMaxLine + 1));
++		CHKmalloc(pDst = MALLOC(maxDest + 1));
+ 	if(iSrc > 0) {
+ 		iSrc--; /* go back to where everything is OK */
++		if(iSrc > maxDest) {
++			DBGPRINTF("parser.Sanitize: have oversize index %zd, "
++				"max %zd - corrected, but should not happen\n",
++				iSrc, maxDest);
++			iSrc = maxDest;
++		}
+ 		memcpy(pDst, pszMsg, iSrc); /* fast copy known good */
+ 	}
+ 	iDst = iSrc;
+-- 
+2.14.4
+
