@@ -1,0 +1,28 @@
+From cc09e7a6e893157a4d7a173c78f4b0a0496e8fbd Mon Sep 17 00:00:00 2001
+From: Rainer Gerhards <rgerhards@adiscon.com>
+Date: Thu, 28 Sep 2017 19:08:35 +0200
+Subject: [PATCH] omrelp bugfix: segfault if rebindinterval config param is
+ used
+
+closes https://github.com/rsyslog/rsyslog/issues/120
+---
+ plugins/omrelp/omrelp.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/plugins/omrelp/omrelp.c b/plugins/omrelp/omrelp.c
+index 3df062e0e..d32a66e07 100644
+--- a/plugins/omrelp/omrelp.c
++++ b/plugins/omrelp/omrelp.c
+@@ -566,8 +566,10 @@ ENDdoAction
+
+ BEGINendTransaction
+ CODESTARTendTransaction
+-	dbgprintf("omrelp: endTransaction\n");
+-	relpCltHintBurstEnd(pWrkrData->pRelpClt);
++	DBGPRINTF("omrelp: endTransaction, connected %d\n", pWrkrData->bIsConnected);
++	if(pWrkrData->bIsConnected) {
++		relpCltHintBurstEnd(pWrkrData->pRelpClt);
++	}
+ ENDendTransaction
+
+ BEGINparseSelectorAct

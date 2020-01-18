@@ -1,0 +1,46 @@
+diff -up ./plugins/imjournal/imjournal.c.journal-reloaded ./plugins/imjournal/imjournal.c
+--- ./plugins/imjournal/imjournal.c.journal-reloaded	2017-10-09 11:05:53.698885473 -0400
++++ ./plugins/imjournal/imjournal.c	2017-10-09 11:08:54.179885473 -0400
+@@ -509,8 +509,7 @@ pollJournal(void)
+ 		}
+ 
+ 		iRet = loadJournalState();
+-		errmsg.LogError(0, RS_RET_OK, "imjournal: "
+-			"journal reloaded...");	
++		LogMsg(0, RS_RET_OK, LOG_NOTICE, "imjournal: journal reloaded...");
+ 	} else if (jr < 0) {
+ 		char errStr[256];
+ 		rs_strerror_r(errno, errStr, sizeof(errStr));
+diff -up ./runtime/errmsg.c.journal-reloaded ./runtime/errmsg.c
+--- ./runtime/errmsg.c.journal-reloaded	2016-12-03 12:41:03.000000000 -0500
++++ ./runtime/errmsg.c	2017-10-09 11:05:53.704885473 -0400
+@@ -115,7 +115,7 @@ doLogMsg(const int iErrno, const int iEr
+  * maps to a specific error event).
+  * rgerhards, 2008-06-27
+  */
+-static void __attribute__((format(printf, 3, 4)))
++void __attribute__((format(printf, 3, 4)))
+ LogError(const int iErrno, const int iErrCode, const char *fmt, ... )
+ {
+ 	va_list ap;
+@@ -144,7 +144,7 @@ LogError(const int iErrno, const int iEr
+  * maps to a specific error event).
+  * rgerhards, 2008-06-27
+  */
+-static void __attribute__((format(printf, 4, 5)))
++void __attribute__((format(printf, 4, 5)))
+ LogMsg(const int iErrno, const int iErrCode, const int severity, const char *fmt, ... )
+ {
+ 	va_list ap;
+diff -up ./runtime/errmsg.h.journal-reloaded ./runtime/errmsg.h
+--- ./runtime/errmsg.h.journal-reloaded	2016-12-03 12:41:03.000000000 -0500
++++ ./runtime/errmsg.h	2017-10-09 11:05:53.704885473 -0400
+@@ -44,5 +44,8 @@ ENDinterface(errmsg)
+ PROTOTYPEObj(errmsg);
+ void resetErrMsgsFlag(void);
+ int hadErrMsgs(void);
++void __attribute__((format(printf, 3, 4))) LogError(const int iErrno, const int iErrCode, const char *fmt, ... );
++void __attribute__((format(printf, 4, 5)))
++	LogMsg(const int iErrno, const int iErrCode, const int severity, const char *fmt, ... );
+ 
+ #endif /* #ifndef INCLUDED_ERRMSG_H */

@@ -1,0 +1,24 @@
+From: Jiri Vymazal <jvymazal@redhat.com>
+Date: Fri, 13 Jan 2017 13:38:53 -0500
+Subject: [PATCH 1/1] Rebased from: Patch33:
+ rsyslog-7.4.7-rhbz1245194-imjournal-ste-file.patch
+
+Resolves:
+rhbz#1245194
+---
+ plugins/imjournal/imjournal.c | 2 ++
+ 1 file changed, 2 insertions(+), 0 deletions(-)
+
+diff --git a/plugins/imjournal/imjournal.c b/plugins/imjournal/imjournal.c
+index d4ea0d5..9d40e04 100644
+--- a/plugins/imjournal/imjournal.c
++++ b/plugins/imjournal/imjournal.c
+@@ -793,6 +793,8 @@
+ 		NULL, &cs.stateFile, STD_LOADABLE_MODULE_ID));
+ 	CHKiRet(omsdRegCFSLineHdlr((uchar *)"imjournalignorepreviousmessages", 0, eCmdHdlrBinary,
+ 		NULL, &cs.bIgnorePrevious, STD_LOADABLE_MODULE_ID));
++	CHKiRet(omsdRegCFSLineHdlr((uchar *)"imjournalignorenonvalidstatefile", 0, eCmdHdlrBinary,
++		NULL, &cs.bIgnoreNonValidStatefile, STD_LOADABLE_MODULE_ID)); 
+ 	CHKiRet(omsdRegCFSLineHdlr((uchar *)"imjournaldefaultseverity", 0, eCmdHdlrSeverity,
+ 		NULL, &cs.iDfltSeverity, STD_LOADABLE_MODULE_ID));
+ 	CHKiRet(omsdRegCFSLineHdlr((uchar *)"imjournaldefaultfacility", 0, eCmdHdlrCustomHandler,

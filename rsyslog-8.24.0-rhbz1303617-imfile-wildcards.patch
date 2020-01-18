@@ -1,0 +1,30 @@
+From 75dc28c1cb4d3988608352f83f7dc420c17d7c64 Mon Sep 17 00:00:00 2001
+From: Tomas Sykora <tosykora@redhat.com>
+Date: Thu, 24 Nov 2016 10:27:48 -0500
+Subject: [PATCH 2/4] Rebased from:
+ rsyslog-7.4.7-rhbz1303617-imfile-wildcards.patch
+
+Resolves:
+rhbz#1303617
+
+-this patch was already upstreamed, we just have different default option (polling) than upstream
+---
+ plugins/imfile/imfile.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/plugins/imfile/imfile.c b/plugins/imfile/imfile.c
+index 519768c..09a321e 100644
+--- a/plugins/imfile/imfile.c
++++ b/plugins/imfile/imfile.c
+@@ -1121,7 +1121,7 @@ BEGINsetModCnf
+ 	struct cnfparamvals *pvals = NULL;
+ 	int i;
+ CODESTARTsetModCnf
+-	loadModConf->opMode = OPMODE_INOTIFY; /* new style config has different default! */
++	loadModConf->opMode = OPMODE_POLLING; /* Difference from upstream, upstream has default option INOTIFY */
+ 	pvals = nvlstGetParams(lst, &modpblk, NULL);
+ 	if(pvals == NULL) {
+ 		errmsg.LogError(0, RS_RET_MISSING_CNFPARAMS, "imfile: error processing module "
+-- 
+2.7.4
+

@@ -1,0 +1,36 @@
+From 1a80a71e91f445f29763fbd724a1c6f3fbf2077a Mon Sep 17 00:00:00 2001
+From: Tomas Sykora <tosykora@redhat.com>
+Date: Fri, 23 Dec 2016 06:49:22 -0500
+Subject: [PATCH 1/3] When flushOnTXEnd is off messages should be written to a
+ file only when the buffer is full. This was broken with upstream commit
+ 6de0103, which was reverted with this patch.
+
+Resolves: RHBZ#1399569
+---
+ tools/omfile.c | 9 ++-------
+ 1 file changed, 2 insertions(+), 7 deletions(-)
+
+diff --git a/tools/omfile.c b/tools/omfile.c
+index 77bf65c..4d849c5 100644
+--- a/tools/omfile.c
++++ b/tools/omfile.c
+@@ -1046,14 +1046,9 @@ CODESTARTcommitTransaction
+ 		writeFile(pData, pParams, i);
+ 	}
+ 	/* Note: pStrm may be NULL if there was an error opening the stream */
+-	if(pData->bUseAsyncWriter) {
+-		if(pData->bFlushOnTXEnd && pData->pStrm != NULL) {
++	if(pData->bFlushOnTXEnd && pData->pStrm != NULL) {
++		if(!pData->bUseAsyncWriter)
+ 			CHKiRet(strm.Flush(pData->pStrm));
+-		}
+-	} else {
+-		if(pData->pStrm != NULL) {
+-			CHKiRet(strm.Flush(pData->pStrm));
+-		}
+ 	}
+ 
+ finalize_it:
+-- 
+2.9.3
+

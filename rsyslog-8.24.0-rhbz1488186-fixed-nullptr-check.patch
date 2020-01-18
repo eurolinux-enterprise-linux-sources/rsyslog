@@ -1,0 +1,27 @@
+From a5b40bb57cf47d964ad3873ddf550e7885df9f8e Mon Sep 17 00:00:00 2001
+From: Marek Tamaskovic <tamaskovic.marek@gmail.com>
+Date: Wed, 6 Sep 2017 17:08:45 +0200
+Subject: [PATCH] fixed nullptr check
+
+---
+ plugins/imjournal/imjournal.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/plugins/imjournal/imjournal.c b/plugins/imjournal/imjournal.c
+index e3e0f39..938e8b8 100644
+--- a/plugins/imjournal/imjournal.c
++++ b/plugins/imjournal/imjournal.c
+@@ -514,7 +514,9 @@ pollJournal(void)
+ 			ABORT_FINALIZE(RS_RET_ERR);
+ 		}
+ 
+-		iRet = loadJournalState();
++		if(cs.stateFile != NULL){
++			iRet = loadJournalState();
++		}
+ 		LogMsg(0, RS_RET_OK, LOG_NOTICE, "imjournal: journal reloaded...");
+ 	} else if (jr < 0) {
+ 		char errStr[256];
+-- 
+2.9.5
+

@@ -1,0 +1,18 @@
+--- a/source/configuration/modules/imfile.rst	2017-10-31 10:28:39.582763203 +0100
++++ b/source/configuration/modules/imfile.rst	2017-10-31 10:29:52.961142905 +0100
+@@ -100,12 +100,13 @@
+    single: imfile; mode
+ .. function:: mode ["inotify"/"polling"]
+ 
+-   *Default: "inotify"*
++   *Default: "polling"*
+ 
+    *Available since: 8.1.5*
+ 
+   This specifies if imfile is shall run in inotify ("inotify") or polling
+-  ("polling") mode. Traditionally, imfile used polling mode, which is
++  ("polling") mode. Traditionally, imfile used polling mode (and this option 
++  is ON by default in RHEL because of backwards compatibility), which is
+   much more resource-intense (and slower) than inotify mode. It is
+   suggested that users turn on "polling" mode only if they experience
+   strange problems in inotify mode. In theory, there should never be a

@@ -1,0 +1,29 @@
+From 83ea7bc475cc722033082e51416947842810d1fc Mon Sep 17 00:00:00 2001
+From: Tomas Sykora <tosykora@redhat.com>
+Date: Fri, 23 Dec 2016 06:51:52 -0500
+Subject: [PATCH 2/3] In rsyslog v7 because of bug mix of old and new syntax
+ had to be used to configure tls server-client. In rsyslog v8 this bug was
+ fixed but the mixed configuration didn't worked anymore which was a
+ regresion. With this patch, mixed configuration workes again.
+
+Resolves: RHBZ#1400594
+---
+ tools/omfwd.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/tools/omfwd.c b/tools/omfwd.c
+index 45fcfd6..c1d3e64 100644
+--- a/tools/omfwd.c
++++ b/tools/omfwd.c
+@@ -925,6 +925,8 @@ initTCP(wrkrInstanceData_t *pWrkrData)
+ 		CHKiRet(tcpclt.SetSendPrepRetry(pWrkrData->pTCPClt, TCPSendPrepRetry));
+ 		CHKiRet(tcpclt.SetFraming(pWrkrData->pTCPClt, pData->tcp_framing));
+ 		CHKiRet(tcpclt.SetRebindInterval(pWrkrData->pTCPClt, pData->iRebindInterval));
++		if (cs.iStrmDrvrMode)
++                        pData->iStrmDrvrMode = cs.iStrmDrvrMode;
+ 	}
+ finalize_it:
+ 	RETiRet;
+-- 
+2.9.3
+

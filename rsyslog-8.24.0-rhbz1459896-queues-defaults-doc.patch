@@ -1,0 +1,138 @@
+From c8be9a713a57f07311560af50c24267b30bef21b Mon Sep 17 00:00:00 2001
+From: Jiri Vymazal <jvymazal@redhat.com>
+Date: Tue, 29 Aug 2017 16:32:15 +0200
+Subject: [PATCH] fixed queue default values
+
+---
+ source/concepts/queues.rst                                       | 7 +++----
+ source/configuration/global/index.rst                            | 6 +++---
+ source/configuration/global/options/rsconf1_mainmsgqueuesize.rst | 2 +-
+ source/rainerscript/queue_parameters.rst                         | 15 ++++++++++++---
+ source/configuration/action/index.rst                            | 12 ++++++------
+ 5 files changed, 24 insertions(+), 16 deletions(-)
+
+diff --git a/source/concepts/queues.rst b/source/concepts/queues.rst
+index c71413c..9b41128 100644
+--- a/source/concepts/queues.rst
++++ b/source/concepts/queues.rst
+@@ -273,10 +273,9 @@ actually needed.
+ The water marks can be set via the "*$<object>QueueHighWatermark*\ "
+ and  "*$<object>QueueLowWatermark*\ " configuration file directives.
+ Note that these are actual numbers, not percentages. Be sure they make
+-sense (also in respect to "*$<object>QueueSize*\ "), as rsyslodg does
+-currently not perform any checks on the numbers provided. It is easy to
+-screw up the system here (yes, a feature enhancement request is filed
+-;)).
++sense (also in respect to "*$<object>QueueSize*\ "). Rsyslodg does
++perform some checks on the numbers provided, and issues warning when
++numbers are "suspicious".
+ 
+ Limiting the Queue Size
+ -----------------------
+diff --git a/source/configuration/global/index.rst b/source/configuration/global/index.rst
+index 2738f21..a53ef23 100644
+--- a/source/configuration/global/index.rst
++++ b/source/configuration/global/index.rst
+@@ -137,13 +137,13 @@ To understand queue parameters, read
+ -  **$MainMsgQueueDequeueSlowdown** <number> [number is timeout in
+    *micro*\ seconds (1000000us is 1sec!), default 0 (no delay). Simple
+    rate-limiting!]
+--  **$MainMsgQueueDiscardMark** <number> [default 9750]
++-  **$MainMsgQueueDiscardMark** <number> [default 98000]
+ -  **$MainMsgQueueDiscardSeverity** <severity> [either a textual or
+    numerical severity! default 4 (warning)]
+ -  **$MainMsgQueueFileName** <name>
+--  **$MainMsgQueueHighWaterMark** <number> [default 8000]
++-  **$MainMsgQueueHighWaterMark** <number> [default 80000]
+ -  **$MainMsgQueueImmediateShutdown** [on/**off**]
+--  **$MainMsgQueueLowWaterMark** <number> [default 2000]
++-  **$MainMsgQueueLowWaterMark** <number> [default 20000]
+ -  **$MainMsgQueueMaxFileSize** <size\_nbr>, default 1m
+ -  **$MainMsgQueueTimeoutActionCompletion** <number> [number is timeout in
+    ms (1000ms is 1sec!), default 1000, 0 means immediate!]
+diff --git a/source/configuration/global/options/rsconf1_mainmsgqueuesize.rst b/source/configuration/global/options/rsconf1_mainmsgqueuesize.rst
+index 050407c..3e902cf 100644
+--- a/source/configuration/global/options/rsconf1_mainmsgqueuesize.rst
++++ b/source/configuration/global/options/rsconf1_mainmsgqueuesize.rst
+@@ -3,7 +3,7 @@ $MainMsgQueueSize
+ 
+ **Type:** global configuration directive
+ 
+-**Default:** 10000
++**Default:** 100000
+ 
+ **Description:**
+ 
+diff --git a/source/rainerscript/queue_parameters.rst b/source/rainerscript/queue_parameters.rst
+index 4453721..3f2b7a2 100644
+--- a/source/rainerscript/queue_parameters.rst
++++ b/source/rainerscript/queue_parameters.rst
+@@ -33,8 +33,14 @@ read the :doc:`queues <../concepts/queues>` documentation.
+    For more information on the current status of this restriction see
+    the `rsyslog FAQ: "lower bound for queue
+    sizes" <http://www.rsyslog.com/lower-bound-for-queue-sizes/>`_.
++
++   The default depends on queue type and, if you need
++   a specific value, please specify it. Otherwise rsyslog selects what
++   it consideres appropriate. For example, ruleset queues have a default
++   size of 50000 and action queues which are configured to be non-direct
++   have a size of 1000.
+ -  **queue.dequeuebatchsize** number
+-   default 16
++   default 128
+ -  **queue.maxdiskspace** number
+    The maximum size that all queue files together will use on disk. Note
+    that the actual size may be slightly larger than the configured max,
+@@ -46,8 +47,9 @@ read the :doc:`queues <../concepts/queues>` documentation.
+    processing, because disk queue mode is very considerably slower than
+    in-memory queue mode. Going to disk should be reserved for cases
+    where an output action destination is offline for some period.
++   default 90% of queue size
+ -  **queue.lowwatermark** number
+-   default 2000
++   default 70% of queue size
+ -  **queue.fulldelaymark** number 
+    Number of messages when the queue should block delayable messages. 
+    Messages are NO LONGER PROCESSED until the queue has sufficient space 
+@@ -59,9 +61,11 @@ read the :doc:`queues <../concepts/queues>` documentation.
+    out of space. Please note that if you use a DA queue, setting the 
+    fulldelaymark BELOW the highwatermark makes the queue never activate 
+    disk mode for delayable inputs. So this is probably not what you want.
++   default 97% of queue size
+ -  **queue.lightdelaymark** number
++   default 70% of queue size
+ -  **queue.discardmark** number
+-   default 9750
++   default 80% of queue size
+ -  **queue.discardseverity** number
+    \*numerical\* severity! default 8 (nothing discarded)
+ -  **queue.checkpointinterval** number
+diff --git a/source/configuration/action/index.rst b/source/configuration/action/index.rst
+index 3e7cd24..9352866 100644
+--- a/source/configuration/action/index.rst
++++ b/source/configuration/action/index.rst
+@@ -163,18 +163,18 @@ following action, only. The next and all other actions will be
+ in "direct" mode (no real queue) if not explicitely specified otherwise.
+
+ -  **$ActionQueueCheckpointInterval** <number>
+--  **$ActionQueueDequeueBatchSize** <number> [default 16]
++-  **$ActionQueueDequeueBatchSize** <number> [default 128]
+ -  **$ActionQueueDequeueSlowdown** <number> [number is timeout in
+    *micro*\ seconds (1000000us is 1sec!), default 0 (no delay). Simple
+    rate-limiting!]
+--  **$ActionQueueDiscardMark** <number> [default 9750]
+--  **$ActionQueueDiscardSeverity** <number> [\*numerical\* severity! default
+-   4 (warning)]
++-  **$ActionQueueDiscardMark** <number> [default 80% of queue size]
++-  **$ActionQueueDiscardSeverity** <number> [\*numerical\* severity! default
++   8 (nothing discarded)]
+ -  **$ActionQueueFileName** <name>
+--  **$ActionQueueHighWaterMark** <number> [default 8000]
++-  **$ActionQueueHighWaterMark** <number> [default 90% of queue size]
+ -  **$ActionQueueImmediateShutdown** [on/**off**]
+ -  **$ActionQueueSize** <number>
+--  **$ActionQueueLowWaterMark** <number> [default 2000]
++-  **$ActionQueueLowWaterMark** <number> [default 70% of queue size]
+ -  **$ActionQueueMaxFileSize** <size\_nbr>, default 1m
+ -  **$ActionQueueTimeoutActionCompletion** <number> [number is timeout in ms
+    (1000ms is 1sec!), default 1000, 0 means immediate!]

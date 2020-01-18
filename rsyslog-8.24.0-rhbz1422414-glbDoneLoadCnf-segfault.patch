@@ -1,0 +1,84 @@
+From d649d77cd585f70c6122d7e4ce95e82ad0e9af5e Mon Sep 17 00:00:00 2001
+From: Radovan Sroka <rsroka@redhat.com>
+Date: Thu, 23 Feb 2017 15:05:27 +0100
+Subject: [PATCH] Fixed segfault in glblDoneLoadCnf()
+
+This is caused by uninitialized net static structure in glbl objUse(net)
+is not called after start of glbl module.
+
+It looks like it is not possible to use objUse(net) when glbl module
+starts. So we call it inside of glblDoneLoadCnf().
+---
+ runtime/glbl.c   | 6 ++++--
+ runtime/glbl.h   | 2 +-
+ runtime/rsconf.c | 6 +++---
+ 3 files changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/runtime/glbl.c b/runtime/glbl.c
+index 2079c46..1a32c2d 100644
+--- a/runtime/glbl.c
++++ b/runtime/glbl.c
+@@ -1076,11 +1076,13 @@ do_setenv(const char *const var)
+ /* This processes the "regular" parameters which are to be set after the
+  * config has been fully loaded.
+  */
+-void
++rsRetVal
+ glblDoneLoadCnf(void)
+ {
+ 	int i;
+ 	unsigned char *cstr;
++	DEFiRet;
++	CHKiRet(objUse(net, CORE_COMPONENT));
+ 
+ 	qsort(tzinfos, ntzinfos, sizeof(tzinfo_t), qs_arrcmp_tzinfo);
+ 	DBGPRINTF("Timezone information table (%d entries):\n", ntzinfos);
+@@ -1210,7 +1212,7 @@ glblDoneLoadCnf(void)
+ 		stddbg = -1;
+ 	}
+ 
+-finalize_it:	return;
++finalize_it:	RETiRet;
+ }
+ 
+ 
+diff --git a/runtime/glbl.h b/runtime/glbl.h
+index 6d18a2c..048c0a6 100644
+--- a/runtime/glbl.h
++++ b/runtime/glbl.h
+@@ -125,7 +125,7 @@ void glblProcessCnf(struct cnfobj *o);
+ void glblProcessTimezone(struct cnfobj *o);
+ void glblProcessMainQCnf(struct cnfobj *o);
+ void glblDestructMainqCnfObj(void);
+-void glblDoneLoadCnf(void);
++rsRetVal glblDoneLoadCnf(void);
+ const uchar * glblGetWorkDirRaw(void);
+ tzinfo_t* glblFindTimezoneInfo(char *id);
+ int GetGnuTLSLoglevel(void);
+diff --git a/runtime/rsconf.c b/runtime/rsconf.c
+index dc6bd7f..f337e1f 100644
+--- a/runtime/rsconf.c
++++ b/runtime/rsconf.c
+@@ -627,11 +627,11 @@ dropPrivileges(rsconf_t *cnf)
+ /* tell the rsysog core (including ourselfs) that the config load is done and
+  * we need to prepare to move over to activate mode.
+  */
+-static inline void
++static inline rsRetVal
+ tellCoreConfigLoadDone(void)
+ {
+ 	DBGPRINTF("telling rsyslog core that config load for %p is done\n", loadConf);
+-	glblDoneLoadCnf();
++	return glblDoneLoadCnf();
+ }
+ 
+ 
+@@ -1345,7 +1345,7 @@ ourConf = loadConf; // TODO: remove, once ourConf is gone!
+ 	DBGPRINTF("Number of actions in this configuration: %d\n", iActionNbr);
+ 	rulesetOptimizeAll(loadConf);
+ 
+-	tellCoreConfigLoadDone();
++	CHKiRet(tellCoreConfigLoadDone());
+ 	tellModulesConfigLoadDone();
+ 
+ 	tellModulesCheckConfig();

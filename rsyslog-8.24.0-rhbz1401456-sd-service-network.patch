@@ -1,0 +1,12 @@
+diff -up ./rsyslog.service.in.network ./rsyslog.service.in
+--- ./rsyslog.service.in.network	2017-08-30 09:19:50.845218557 -0400
++++ ./rsyslog.service.in	2017-08-30 09:21:34.141218557 -0400
+@@ -1,6 +1,8 @@
+ [Unit]
+ Description=System Logging Service
+ Requires=syslog.socket
++Wants=network.target network-online.target
++After=network.target network-online.target
+ Documentation=man:rsyslogd(8)
+ Documentation=http://www.rsyslog.com/doc/
+ 

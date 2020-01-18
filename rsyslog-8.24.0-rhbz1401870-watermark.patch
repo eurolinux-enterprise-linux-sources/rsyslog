@@ -1,0 +1,31 @@
+From f1cff52cc3bca3ed050f5e8e2c25698bebcf3258 Mon Sep 17 00:00:00 2001
+From: Tomas Sykora <tosykora@redhat.com>
+Date: Fri, 23 Dec 2016 06:56:41 -0500
+Subject: [PATCH 3/3] When highwatermark is reached, messages should be
+ imediately written to a queue file. Instead of that, messages weren't written
+ until rsyslog was stopped. This was caused by overwritting watermark values
+ by -1.
+
+Resolves: RHBZ#1401870
+---
+ action.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/action.c b/action.c
+index 45828cc..3f8c82c 100644
+--- a/action.c
++++ b/action.c
+@@ -276,8 +276,8 @@ actionResetQueueParams(void)
+ 	cs.ActionQueType = QUEUETYPE_DIRECT;		/* type of the main message queue above */
+ 	cs.iActionQueueSize = 1000;			/* size of the main message queue above */
+ 	cs.iActionQueueDeqBatchSize = 16;		/* default batch size */
+-	cs.iActionQHighWtrMark = -1;			/* high water mark for disk-assisted queues */
+-	cs.iActionQLowWtrMark = -1;			/* low water mark for disk-assisted queues */
++	cs.iActionQHighWtrMark = 800;			/* high water mark for disk-assisted queues */
++	cs.iActionQLowWtrMark = 200;			/* low water mark for disk-assisted queues */
+ 	cs.iActionQDiscardMark = 980;			/* begin to discard messages */
+ 	cs.iActionQDiscardSeverity = 8;			/* discard warning and above */
+ 	cs.iActionQueueNumWorkers = 1;			/* number of worker threads for the mm queue above */
+-- 
+2.9.3
+

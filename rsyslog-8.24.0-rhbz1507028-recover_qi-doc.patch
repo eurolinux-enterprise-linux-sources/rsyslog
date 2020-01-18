@@ -1,0 +1,27 @@
+From ff07a7cfc171dc2151cc8afe44776525d34a9e01 Mon Sep 17 00:00:00 2001
+From: jvymazal <jvymazal@redhat.com>
+Date: Tue, 3 Jan 2017 10:24:26 +0100
+Subject: [PATCH] Update queues.rst
+
+Update queues.rst
+---
+ source/concepts/queues.rst | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/source/concepts/queues.rst b/source/concepts/queues.rst
+index eb394e8..c71413c 100644
+--- a/source/concepts/queues.rst
++++ b/source/concepts/queues.rst
+@@ -153,6 +153,12 @@ can be requested via "*<object>QueueSyncQueueFiles on/off* with the
+ default being off. Activating this option has a performance penalty, so
+ it should not be turned on without reason.
+ 
++If you happen to lose or otherwise need the housekeeping structures and 
++have all yours queue chunks you can use perl script included in rsyslog
++package to generate it. 
++Usage: recover_qi.pl -w *$WorkDirectory* -f QueueFileName -d 8 > QueueFileName.qi
++
++
+ In-Memory Queues
+ ~~~~~~~~~~~~~~~~
+ 
