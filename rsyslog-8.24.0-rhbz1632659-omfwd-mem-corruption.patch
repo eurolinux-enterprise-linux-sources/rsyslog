@@ -1,0 +1,51 @@
+From 5bbd0a4b3c212425ace54bf8a8ede5b832776209 Mon Sep 17 00:00:00 2001
+From: Rainer Gerhards <rgerhards@adiscon.com>
+Date: Wed, 6 Sep 2017 13:16:42 +0200
+Subject: [PATCH] core: memory corruption during configuration parsing
+
+when omfwd is used with the $streamdriverpermittedpeers legacy
+parameter, a memory corruption can occur. This depends on the
+length of the provided strings and probably the malloc subsystem.
+
+Once config parsing succeeds, no problem can happen.
+
+Thanks to Brent Douglas for initially reporting this issue and
+providing great analysis.
+Thanks to github user bwdoll for analyzing this bug and providing
+a suggested fix (which is almost what this commit includes).
+
+closes https://github.com/rsyslog/rsyslog/issues/1408
+closes https://github.com/rsyslog/rsyslog/issues/1474
+---
+ tools/omfwd.c | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/tools/omfwd.c b/tools/omfwd.c
+index 3bffbb3cc..8d51fbb51 100644
+--- a/tools/omfwd.c
++++ b/tools/omfwd.c
+@@ -1157,7 +1157,6 @@ CODESTARTnewActInst
+ 			pData->pszStrmDrvrAuthMode = (uchar*)es_str2cstr(pvals[i].val.d.estr, NULL);
+ 		} else if(!strcmp(actpblk.descr[i].name, "streamdriverpermittedpeers")) {
+ 			uchar *start, *str;
+-			uchar save;
+ 			uchar *p;
+ 			int lenStr;
+ 			str = (uchar*)es_str2cstr(pvals[i].val.d.estr, NULL);
+@@ -1170,8 +1169,6 @@ CODESTARTnewActInst
+ 				if(*p == ',') {
+ 					*p = '\0';
+ 				}
+-				save = *(p+1); /* we always have this, at least the \0 byte at EOS */
+-				*(p+1) = '\0';
+ 				if(*start == '\0') {
+ 					DBGPRINTF("omfwd: ignoring empty permitted peer\n");
+ 				} else {
+@@ -1181,7 +1178,6 @@ CODESTARTnewActInst
+ 				start = p+1;
+ 				if(lenStr)
+ 					--lenStr;
+-				*(p+1) = save;
+ 			}
+ 			free(str);
+ 		} else if(!strcmp(actpblk.descr[i].name, "ziplevel")) {

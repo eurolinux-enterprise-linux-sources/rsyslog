@@ -1,0 +1,104 @@
+From: Jiri Vymazal <jvymazal@redhat.com>
+Date: Thu, 14 Mar 2019 10:58:03 +0100
+Subject: [PATCH] Journal cursor related fixes
+
+Added missing free() calls of received journal cursor
+In one case there was possibility of free()'d value of journal
+cursor not being reset, causing double-free and crash later on.
+Not trying to get and save position of invalid journal
+---
+ plugins/imjournal/imjournal.c | 28 +++++----
+ 1 file changed, 15 insertions(+), 13 deletitions(-)
+
+diff --git a/plugins/imjournal/imjournal.c b/plugins/imjournal/imjournal.c
+index a85e52100..f5c2be4b6 100644
+--- a/plugins/imjournal/imjournal.c
++++ b/plugins/imjournal/imjournal.c
+@@ -121,7 +121,7 @@
+ 
+ #define J_PROCESS_PERIOD 1024  /* Call sd_journal_process() every 1,024 records */
+ 
+-static rsRetVal persistJournalState(void);
++static rsRetVal persistJournalState(int trySave);
+ static rsRetVal loadJournalState(void);
+ 
+ static rsRetVal openJournal(sd_journal** jj) {
+@@ -140,10 +140,10 @@
+ 	RETiRet;
+ }
+ 
+-static void closeJournal(sd_journal** jj) {
++static void closeJournal(sd_journal** jj, int trySave) {
+ 
+ 	if (cs.stateFile) { /* can't persist without a state file */
+-		persistJournalState();
++		persistJournalState(trySave);
+ 	}
+ 	sd_journal_close(*jj);
+ 	j_inotify_fd = 0;
+@@ -433,7 +434,7 @@
+ /* This function gets journal cursor and saves it into state file
+  */
+ static rsRetVal
+-persistJournalState (void)
++persistJournalState(int trySave)
+ {
+ 	DEFiRet;
+ 	FILE *sf; /* state file */
+@@ -443,12 +444,13 @@
+ 	if (cs.bWorkAroundJournalBug) {
+ 		if (!last_cursor)
+ 			ABORT_FINALIZE(RS_RET_OK);
+-
+-	} else if ((ret = sd_journal_get_cursor(j, &last_cursor)) < 0) {
+-		char errStr[256];
+-		rs_strerror_r(-(ret), errStr, sizeof(errStr));
+-		errmsg.LogError(0, RS_RET_ERR, "sd_journal_get_cursor() failed: '%s'\n", errStr);
+-		ABORT_FINALIZE(RS_RET_ERR);
++	} else if (trySave) {
++		if ((ret = sd_journal_get_cursor(j, &last_cursor))) {
++			LogError(-ret, RS_RET_ERR, "imjournal: sd_journal_get_cursor() failed");
++			ABORT_FINALIZE(RS_RET_ERR);
++		}
++	} else { /* not trying to get cursor out of invalid journal state */
++		ABORT_FINALIZE(RS_RET_OK);
+ 	}
+ 	/* we create a temporary name by adding a ".tmp"
+ 	 * suffix to the end of our state file's name
+@@ -501,7 +506,7 @@
+ 	r = sd_journal_wait(j, POLL_TIMEOUT);
+ 
+ 	if (r == SD_JOURNAL_INVALIDATE) {
+-		closeJournal(&j);
++		closeJournal(&j, 0);
+ 
+ 		iRet = openJournal(&j);
+ 		if (iRet != RS_RET_OK)
+@@ -628,7 +634,7 @@
+ tryRecover(void) {
+ 	errmsg.LogMsg(0, RS_RET_OK, LOG_INFO, "imjournal: trying to recover from unexpected "
+ 		"journal error");
+-	closeJournal(&j);
++	closeJournal(&j, 1);
+ 	srSleep(10, 0);	// do not hammer machine with too-frequent retries
+ 	openJournal(&j);
+ }
+@@ -708,7 +708,7 @@
+ 		if (cs.stateFile) { /* can't persist without a state file */
+ 			/* TODO: This could use some finer metric. */
+ 			if ((count % cs.iPersistStateInterval) == 0) {
+-				persistJournalState();
++				persistJournalState(1);
+ 			}
+ 		}
+ 	}
+@@ -764,7 +764,7 @@
+ /* close journal */
+ BEGINafterRun
+ CODESTARTafterRun
+-	closeJournal(&j);
++	closeJournal(&j, 1);
+ 	ratelimitDestruct(ratelimiter);
+ ENDafterRun
+ 
+

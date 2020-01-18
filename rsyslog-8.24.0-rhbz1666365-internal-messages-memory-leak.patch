@@ -1,0 +1,39 @@
+From 890e3bb0d83719350ace0ee00b1d2d471333778d Mon Sep 17 00:00:00 2001
+From: Rainer Gerhards <rgerhards@adiscon.com>
+Date: Wed, 10 May 2017 11:46:45 +0200
+Subject: [PATCH] core bugfix: memory leak when internal messages not processed
+ internally
+
+In this case, the message object is not destructed, resulting in
+a memory leak. Usually, this is no problem due to the low number
+of internal message, but it can become an issue if a large number
+of messages is emitted.
+
+closes https://github.com/rsyslog/rsyslog/issues/1548
+closes https://github.com/rsyslog/rsyslog/issues/1531
+---
+ tools/rsyslogd.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/tools/rsyslogd.c b/tools/rsyslogd.c
+index 417804e18..d2e5361a6 100644
+--- a/tools/rsyslogd.c
++++ b/tools/rsyslogd.c
+@@ -840,7 +840,7 @@ submitMsgWithDfltRatelimiter(smsg_t *pMsg)
+ 
+ 
+ static void
+-logmsgInternal_doWrite(smsg_t *const __restrict__ pMsg)
++logmsgInternal_doWrite(smsg_t *pMsg)
+ {
+ 	if(bProcessInternalMessages) {
+ 		ratelimitAddMsg(internalMsg_ratelimiter, NULL, pMsg);
+@@ -852,6 +852,8 @@ logmsgInternal_doWrite(smsg_t *const __restrict__ pMsg)
+ #		else
+ 		syslog(pri, "%s", msg);
+ #		endif
++		/* we have emitted the message and must destruct it */
++		msgDestruct(&pMsg);
+ 	}
+ }
+ 

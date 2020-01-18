@@ -1,0 +1,306 @@
+From 31350bc0b935920f9924317b4cb3602602420f83 Mon Sep 17 00:00:00 2001
+From: Jiri Vymazal <jvymazal@redhat.com>
+Date: Fri, 16 Nov 2018 13:16:13 +0100
+Subject: [PATCH] bugfix imfile: file change was not reliably detected
+
+A change in the inode was not detected under all circumstances,
+most importantly not in some logrotate cases.
+
+Previously, truncation was only detected at end of file. Especially with
+busy files that could cause loss of data and possibly also stall imfile
+reading. The new code now also checks during each read. Obviously, there
+is some additional overhead associated with that, but this is unavoidable.
+
+It still is highly recommended NOT to turn on "reopenOnTruncate" in imfile.
+Note that there are also inherant reliability issues. There is no way to
+"fix" these, as they are caused by races between the process(es) who truncate
+and rsyslog reading the file. But with the new code, the "problem window"
+should be much smaller and, more importantly, imfile should not stall.
+---
+ plugins/imfile/imfile.c                       |  13 ++++++++++++-
+ runtime/rsyslog.h                             |   1 +
+ runtime/stream.c                              | 116 ++++++++-
+ runtime/stream.h                              |   7 +++++++
+ 4 files changed, 125 insertions(+), 11 deletions(-)
+
+diff --git a/plugins/imfile/imfile.c b/plugins/imfile/imfile.c
+index f4a4ef9b7..6be8b2999 100644
+--- a/plugins/imfile/imfile.c
++++ b/plugins/imfile/imfile.c
+@@ -740,8 +740,19 @@ detect_updates(fs_edge_t *const edge)
+ 			act_obj_unlink(act);
+ 			restart = 1;
+ 			break;
++		} else if(fileInfo.st_ino != act->ino) {
++			DBGPRINTF("file '%s' inode changed from %llu to %llu, unlinking from "
++				"internal lists\n", act->name, (long long unsigned) act->ino,
++				(long long unsigned) fileInfo.st_ino);
++			if(act->pStrm != NULL) {
++				/* we do no need to re-set later, as act_obj_unlink
++				 * will destroy the strm obj */
++				strmSet_checkRotation(act->pStrm, STRM_ROTATION_DO_NOT_CHECK);
++			}
++			act_obj_unlink(act);
++			restart = 1;
++			break;
+ 		}
+-		// TODO: add inode check for change notification!
+ 
+		/* Note: active nodes may get deleted, so we need to do the
+		 * pointer advancement at the end of the for loop!
+diff --git a/runtime/rsyslog.h b/runtime/rsyslog.h
+index 61d0af623..22a1c46d1 100644
+--- a/runtime/rsyslog.h
++++ b/runtime/rsyslog.h
+@@ -183,6 +183,7 @@ enum rsRetVal_                          /** return value. All methods return this if not specified otherwise */
+ 	RS_RET_NOT_IMPLEMENTED = -7,	/**< implementation is missing (probably internal error or lazyness ;)) */
+ 	RS_RET_OUT_OF_MEMORY = -6,	/**< memory allocation failed */
+ 	RS_RET_PROVIDED_BUFFER_TOO_SMALL = -50,/**< the caller provided a buffer, but the called function sees the size of this buffer is too small - operation not carried out */
++	RS_RET_FILE_TRUNCATED = -51,    /**< (input) file was truncated, not an error but a status */
+ 	RS_RET_TRUE = -3,		/**< to indicate a true state (can be used as TRUE, legacy) */
+ 	RS_RET_FALSE = -2,		/**< to indicate a false state (can be used as FALSE, legacy) */
+ 	RS_RET_NO_IRET = -8,	/**< This is a trick for the debuging system - it means no iRet is provided  */
+diff --git a/runtime/stream.c b/runtime/stream.c
+index 2d494c612..5b52591ef 100644
+--- a/runtime/stream.c
++++ b/runtime/stream.c
+@@ -400,6 +400,7 @@ static rsRetVal strmOpenFile(strm_t *pThis)
+ 	CHKiRet(doPhysOpen(pThis));
+ 
+ 	pThis->iCurrOffs = 0;
++	pThis->iBufPtrMax = 0;
+ 	CHKiRet(getFileSize(pThis->pszCurrFName, &offset));
+ 	if(pThis->tOperationsMode == STREAMMODE_WRITE_APPEND) {
+ 		pThis->iCurrOffs = offset;
+@@ -574,7 +574,7 @@ strmNextFile(strm_t *pThis)
+  * a file change is detected only if the inode changes. -- rgerhards, 2011-01-10
+  */
+ static rsRetVal
+-strmHandleEOFMonitor(strm_t *pThis)
++strmHandleEOFMonitor(strm_t *const pThis)
+ {
+ 	DEFiRet;
+ 	struct stat statName;
+@@ -611,7 +611,7 @@ strmHandleEOFMonitor(strm_t *pThis)
+  * rgerhards, 2008-02-13
+  */
+ static rsRetVal
+-strmHandleEOF(strm_t *pThis)
++strmHandleEOF(strm_t *const pThis)
+ {
+ 	DEFiRet;
+ 
+@@ -629,7 +629,13 @@ strmHandleEOF(strm_t *pThis)
+ 			CHKiRet(strmNextFile(pThis));
+ 			break;
+ 		case STREAMTYPE_FILE_MONITOR:
+-			CHKiRet(strmHandleEOFMonitor(pThis));
++			DBGOPRINT((obj_t*) pThis, "file '%s' (%d) EOF, rotationCheck %d\n",
++				pThis->pszCurrFName, pThis->fd, pThis->rotationCheck);
++			if(pThis->rotationCheck == STRM_ROTATION_DO_CHECK) {
++				CHKiRet(strmHandleEOFMonitor(pThis));
++			} else {
++				ABORT_FINALIZE(RS_RET_EOF);
++			}
+ 			break;
+ 	}
+ 
+@@ -636,6 +637,75 @@ strmHandleEOF(strm_t *pThis)
+ 	RETiRet;
+ }
+ 
++
++/* helper to checkTruncation */
++static rsRetVal
++rereadTruncated(strm_t *const pThis, const char *const reason)
++{
++	DEFiRet;
++
++	LogMsg(errno, RS_RET_FILE_TRUNCATED, LOG_WARNING, "file '%s': truncation detected, "
++		"(%s) - re-start reading from beginning",
++		pThis->pszCurrFName, reason);
++	DBGPRINTF("checkTruncation, file %s last buffer CHANGED\n", pThis->pszCurrFName);
++	CHKiRet(strmCloseFile(pThis));
++	CHKiRet(strmOpenFile(pThis));
++	iRet = RS_RET_FILE_TRUNCATED;
++
++finalize_it:
++	RETiRet;
++}
++/* helper to read:
++ * Check if file has been truncated since last read and, if so, re-set reading
++ * to begin of file. To detect truncation, we try to re-read the last block.
++ * If that does not succeed or different data than from the original read is
++ * returned, truncation is assumed.
++ * NOTE: this function must be called only if truncation is enabled AND
++ * when the previous read buffer still is valid (aka "before the next read").
++ * It is ok to call with a 0-size buffer, which we than assume as begin of
++ * reading. In that case, no truncation will be detected.
++ * rgerhards, 2018-09-20
++ */
++static rsRetVal
++checkTruncation(strm_t *const pThis)
++{
++	DEFiRet;
++	int ret;
++	off64_t backseek;
++	assert(pThis->bReopenOnTruncate);
++
++	DBGPRINTF("checkTruncation, file %s, iBufPtrMax %zd\n", pThis->pszCurrFName, pThis->iBufPtrMax);
++	if(pThis->iBufPtrMax == 0) {
++		FINALIZE;
++	}
++
++	int currpos = lseek64(pThis->fd, 0, SEEK_CUR);
++	backseek = -1 * (off64_t) pThis->iBufPtrMax;
++	dbgprintf("checkTruncation in actual processing, currpos %d, backseek is %d\n", (int)currpos, (int) backseek);
++	ret = lseek64(pThis->fd, backseek, SEEK_CUR);
++	if(ret < 0) {
++		iRet = rereadTruncated(pThis, "cannot seek backward to begin of last block");
++		FINALIZE;
++	}
++
++	const ssize_t lenRead = read(pThis->fd, pThis->pIOBuf_truncation, pThis->iBufPtrMax);
++	dbgprintf("checkTruncation proof-read: %d bytes\n", (int) lenRead);
++	if(lenRead < 0) {
++		iRet = rereadTruncated(pThis, "last block could not be re-read");
++		FINALIZE;
++	}
++
++	if(!memcmp(pThis->pIOBuf_truncation, pThis->pIOBuf, pThis->iBufPtrMax)) {
++		DBGPRINTF("checkTruncation, file %s last buffer unchanged\n", pThis->pszCurrFName);
++	} else {
++		iRet = rereadTruncated(pThis, "last block data different");
++	}
++
++finalize_it:
++	RETiRet;
++}
++
++
+ /* read the next buffer from disk
+  * rgerhards, 2008-02-13
+  */
+@@ -668,6 +741,13 @@ strmReadBuf(strm_t *pThis, int *padBytes)
+ 				toRead = (size_t) bytesLeft;
+ 			}
+ 		}
++		if(pThis->bReopenOnTruncate) {
++			rsRetVal localRet = checkTruncation(pThis);
++			if(localRet == RS_RET_FILE_TRUNCATED) {
++				continue;
++			}
++			CHKiRet(localRet);
++		}
+ 		iLenRead = read(pThis->fd, pThis->pIOBuf, toRead);
+ 		DBGOPRINT((obj_t*) pThis, "file %d read %ld bytes\n", pThis->fd, iLenRead);
+ 		/* end crypto */
+@@ -854,7 +854,7 @@
+  * a line, but following lines that are indented are part of the same log entry
+  */
+ static rsRetVal
+-strmReadLine(strm_t *pThis, cstr_t **ppCStr, uint8_t mode, sbool bEscapeLF,
++strmReadLine(strm_t *const pThis, cstr_t **ppCStr, uint8_t mode, sbool bEscapeLF,
+ 	uint32_t trimLineOverBytes, int64 *const strtOffs)
+ {
+         uchar c;
+@@ -1184,6 +1264,7 @@ static rsRetVal strmConstructFinalize(strm_t *pThis)
+ 	} else {
+ 		/* we work synchronously, so we need to alloc a fixed pIOBuf */
+ 		CHKmalloc(pThis->pIOBuf = (uchar*) MALLOC(pThis->sIOBufSize));
++		CHKmalloc(pThis->pIOBuf_truncation = (char*) MALLOC(pThis->sIOBufSize));
+ 	}
+ 
+ finalize_it:
+@@ -1231,6 +1312,7 @@ CODESTARTobjDestruct(strm)
+ 		}
+ 	} else {
+ 		free(pThis->pIOBuf);
++		free(pThis->pIOBuf_truncation);
+ 	}
+ 
+ 	/* Finally, we can free the resources.
+@@ -2147,11 +2150,22 @@ DEFpropSetMeth(strm, cryprov, cryprov_if_t*)
+ void
+ strmSetReadTimeout(strm_t *const __restrict__ pThis, const int val)
+ {
++	ISOBJ_TYPE_assert(pThis, strm);
+ 	pThis->readTimeout = val;
+ }
+ 
+-static rsRetVal strmSetbDeleteOnClose(strm_t *pThis, int val)
++void
++strmSet_checkRotation(strm_t *const pThis, const int val) {
++	ISOBJ_TYPE_assert(pThis, strm);
++	assert(val == STRM_ROTATION_DO_CHECK || val == STRM_ROTATION_DO_NOT_CHECK);
++	pThis->rotationCheck = val;
++}
++
++
++static rsRetVal
++strmSetbDeleteOnClose(strm_t *const pThis, const int val)
+ {
++	ISOBJ_TYPE_assert(pThis, strm);
+ 	pThis->bDeleteOnClose = val;
+ 	if(pThis->cryprov != NULL) {
+ 		pThis->cryprov->SetDeleteOnClose(pThis->cryprovFileData, pThis->bDeleteOnClose);
+@@ -2162,15 +2176,19 @@ static rsRetVal strmSetbDeleteOnClose(strm_t *pThis, int val)
+ 	return RS_RET_OK;
+ }
+ 
+-static rsRetVal strmSetiMaxFiles(strm_t *pThis, int iNewVal)
++static rsRetVal
++strmSetiMaxFiles(strm_t *const pThis, const int iNewVal)
+ {
++	ISOBJ_TYPE_assert(pThis, strm);
+ 	pThis->iMaxFiles = iNewVal;
+ 	pThis->iFileNumDigits = getNumberDigits(iNewVal);
+ 	return RS_RET_OK;
+ }
+ 
+-static rsRetVal strmSetFileNotFoundError(strm_t *pThis, int pFileNotFoundError)
++static rsRetVal 
++strmSetFileNotFoundError(strm_t *const pThis, const int pFileNotFoundError)
+ {
++	ISOBJ_TYPE_assert(pThis, strm);
+ 	pThis->fileNotFoundError = pFileNotFoundError;
+ 	return RS_RET_OK;
+ }
+diff --git a/runtime/stream.h b/runtime/stream.h
+index e3d6c2372..f6f48378a 100644
+--- a/runtime/stream.h
++++ b/runtime/stream.h
+@@ -91,6 +91,10 @@ typedef enum {				/* when extending, do NOT change existing modes! */
+ 	STREAMMODE_WRITE_APPEND = 4
+ } strmMode_t;
+ 
++/* settings for stream rotation (applies not to all processing modes!) */
++#define	STRM_ROTATION_DO_CHECK		0
++#define	STRM_ROTATION_DO_NOT_CHECK	1
++
+ #define STREAM_ASYNC_NUMBUFS 2 /* must be a power of 2 -- TODO: make configurable */
+ /* The strm_t data structure */
+ typedef struct strm_s {
+@@ -114,6 +118,7 @@ typedef struct strm_s {
+ 	sbool bDisabled; /* should file no longer be written to? (currently set only if omfile file size limit fails) */
+ 	sbool bSync;	/* sync this file after every write? */
+ 	sbool bReopenOnTruncate;
++	int rotationCheck; /* rotation check mode */
+ 	size_t sIOBufSize;/* size of IO buffer */
+ 	uchar *pszDir; /* Directory */
+ 	int lenDir;
+@@ -124,6 +124,7 @@ typedef struct strm_s {
+ 	ino_t inode;	/* current inode for files being monitored (undefined else) */
+ 	uchar *pszCurrFName; /* name of current file (if open) */
+ 	uchar *pIOBuf;	/* the iobuffer currently in use to gather data */
++	char *pIOBuf_truncation; /* iobuffer used during trucation detection block re-reads */
+ 	size_t iBufPtrMax;	/* current max Ptr in Buffer (if partial read!) */
+ 	size_t iBufPtr;	/* pointer into current buffer */
+ 	int iUngetC;	/* char set via UngetChar() call or -1 if none set */
+@@ -238,5 +238,6 @@
+ const uchar * strmGetPrevLineSegment(strm_t *const pThis);
+ const uchar * strmGetPrevMsgSegment(strm_t *const pThis);
+ int strmGetPrevWasNL(const strm_t *const pThis);
++void strmSet_checkRotation(strm_t *const pThis, const int val);
+ 
+ #endif /* #ifndef STREAM_H_INCLUDED */

@@ -1,0 +1,40 @@
+From d5bcd5b89b2f88611e73ea193ce35178b1e89b32 Mon Sep 17 00:00:00 2001
+From: Rainer Gerhards <rgerhards@adiscon.com>
+Date: Tue, 19 Dec 2017 10:15:46 +0100
+Subject: [PATCH] core bugfix: MAXFNAME was set too low
+
+it just permitted 200 chars, with almost all systems permitting for
+more. I tried to find a more portable way to find out the actual max,
+but this turned out horrible. The next solution would have been to use
+dynamic alloc, but that often is overkill. So I now settle to just
+increasing the value to 4KiB. This is the Linux limit, and it is by
+far the highest I could find. This should be good to go for quite
+some while but should not put too much stressure on the stack alloc.
+
+closes https://github.com/rsyslog/rsyslog/issues/2228
+---
+ runtime/syslogd-types.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/runtime/syslogd-types.h b/runtime/syslogd-types.h
+index 2cbe8039a..360f6d557 100644
+--- a/runtime/syslogd-types.h
++++ b/runtime/syslogd-types.h
+@@ -4,7 +4,7 @@
+  *
+  * File begun on 2007-07-13 by RGerhards (extracted from syslogd.c)
+  *
+- * Copyright 2007-2014 Adiscon GmbH.
++ * Copyright 2007-2017 Adiscon GmbH.
+  *
+  * This file is part of the rsyslog runtime library.
+  *
+@@ -38,7 +38,7 @@
+ # define UNAMESZ	8	/* length of a login name */
+ #endif
+ #define MAXUNAMES	20	/* maximum number of user names */
+-#define MAXFNAME	200	/* max file pathname length */
++#define MAXFNAME	4096	/* max file pathname length */
+ 
+ #define	_DB_MAXDBLEN	128	/* maximum number of db */
+ #define _DB_MAXUNAMELEN	128	/* maximum number of user name */

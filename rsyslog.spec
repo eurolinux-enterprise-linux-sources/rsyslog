@@ -14,7 +14,7 @@
 Summary: Enhanced system logging and kernel message trapping daemon
 Name: rsyslog
 Version: 8.24.0
-Release: 34%{?dist}
+Release: 38%{?dist}
 License: (GPLv3+ and ASL 2.0)
 Group: System Environment/Daemons
 URL: http://www.rsyslog.com/
@@ -103,6 +103,16 @@ Patch41: rsyslog-8.24.0-doc-rhbz1538372-imjournal-duplicates.patch
 Patch42: rsyslog-8.24.0-rhbz1597264-man-page-fix.patch
 Patch43: rsyslog-8.24.0-rhbz1559408-async-writer.patch
 Patch44: rsyslog-8.24.0-rhbz1600462-wrktable-realloc-null.patch
+
+Patch45: rsyslog-8.24.0-rhbz1632659-omfwd-mem-corruption.patch
+Patch46: rsyslog-8.24.0-rhbz1649250-imfile-rotation.patch
+Patch47: rsyslog-8.24.0-rhbz1658288-imptcp-octet-segfault.patch
+Patch48: rsyslog-8.24.0-rhbz1622767-mmkubernetes-stop-on-pod-delete.patch
+Patch49: rsyslog-8.24.0-rhbz1685901-symlink-error-flood.patch
+Patch50: rsyslog-8.24.0-rhbz1632211-journal-cursor-fix.patch
+Patch51: rsyslog-8.24.0-rhbz1666365-internal-messages-memory-leak.patch
+Patch52: rsyslog-8.24.0-doc-rhbz1625935-mmkubernetes-CRI-O.patch
+Patch53: rsyslog-8.24.0-rhbz1656860-imfile-buffer-overflow.patch
 
 %package crypto
 Summary: Encryption support
@@ -333,6 +343,7 @@ container metadata.
 %patch37 -p1
 %patch40 -p1
 %patch41 -p1
+%patch52 -p1
 #regenerate the docs
 mv build/searchindex.js searchindex_backup.js
 sphinx-build -b html source build
@@ -395,6 +406,16 @@ mv build doc
 %patch42 -p1 -b .manpage
 %patch43 -p1 -b .async-writer
 %patch44 -p1 -b .null-realloc-chk
+
+%patch45 -p1 -b .omfwd-mem-corrupt
+%patch46 -p1 -b .imfile-rotation
+%patch47 -p1 -b .imptcp-octet-count
+%patch48 -p1 -b .mmkubernetes-stop
+%patch49 -p1 -b .symlink-err-flood
+%patch50 -p1 -b .imjournal-cursor
+%patch51 -p1 -b .internal-msg-memleak
+#%patch52 is applied right after doc setup
+%patch53 -p1 -b .imfile-buffer-overflow
 
 autoreconf 
 
@@ -654,6 +675,40 @@ done
 %{_libdir}/rsyslog/mmkubernetes.so
 
 %changelog
+* Mon Apr 08 2019 Jiri Vymazal <jvymazal@redhat.com> - 8.24.0-38
+RHEL 7.7 ERRATUM
+- added patch increasing max path size preventing buffer overflow
+  with too long paths
+  resolves: rhbz#1656860
+
+* Wed Mar 20 2019 Jiri Vymazal <jvymazal@redhat.com> - 8.24.0-37
+RHEL 7.7 ERRATUM
+- edited patch fixing mmkubernetes halt after pod deletition
+  (covscan found an issue in previous version)
+  resolves: rhbz#1622767
+- added patch stopping flooding logs with journald errors
+  resolves: rhbz#1632211
+- added patch stopping flooding logs with symlink false-positives
+  resolves: rhbz#1685901
+- added patch stopping memory leak when processing internal msgs
+  resolves: rhbz#1666365
+- added documentation patch with info about CRI-O to mmkubernetes
+  resolves: rhbz#1625935
+
+* Wed Feb 27 2019 Jiri Vymazal <jvymazal@redhat.com> - 8.24.0-36
+RHEL 7.7 ERRATUM
+- added patch fixing mmkubernetes halt after pod deletition
+  resolves: rhbz#1622767
+
+* Mon Jan 28 2019 Jiri Vymazal <jvymazal@redhat.com> - 8.24.0-35
+RHEL 7.7 ERRATUM
+- added patch fixing memory corruption in omfwd module
+  resolves: rhbz#1632659
+- added patch fixing imfile sopping monitor after rotation
+  resolves: rhbz#1649250
+- added patch addressing imptcp CVE-2018-16881
+  resolves: rhbz#1658288
+
 * Tue Aug 07 2018 Jiri Vymazal <jvymazal@redhat.com> - 8.24.0-34
 RHEL 7.6 ERRATUM
 - updated imfile rewrite patch with parent name bugfix
