@@ -1,0 +1,41 @@
+From b54769b4d8371ce1d60e3c43172a445336ec79b6 Mon Sep 17 00:00:00 2001
+From: Rainer Gerhards <rgerhards@adiscon.com>
+Date: Mon, 24 Sep 2018 13:27:26 +0200
+Subject: [PATCH] bugfix imfile: segfault in ratelimiter
+
+imfile crashes inside rate limit processing, often when log
+files are rotated. However, this could occur in any case where
+the monitored files was closed by imfile, it rotation is just
+the most probable cause for this (moving the file to another
+directory or deleting it also can trigger the same issue, for
+example). The root cause was invalid sequence of operations.
+
+closes https://github.com/rsyslog/rsyslog/issues/3021
+---
+ plugins/imfile/imfile.c | 8 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/plugins/imfile/imfile.c b/plugins/imfile/imfile.c
+index e710f7c44c..f4a4ef9b72 100644
+--- a/plugins/imfile/imfile.c
++++ b/plugins/imfile/imfile.c
+@@ -915,9 +915,6 @@ act_obj_destroy(act_obj_t *const act, const int is_deleted)
+ 			}
+ 		}
+ 	}
+-	if(act->ratelimiter != NULL) {
+-		ratelimitDestruct(act->ratelimiter);
+-	}
+ 	if(act->pStrm != NULL) {
+ 		const instanceConf_t *const inst = act->edge->instarr[0];// TODO: same file, multiple instances?
+ 		pollFile(act); /* get any left-over data */
+@@ -934,6 +931,9 @@ act_obj_destroy(act_obj_t *const act, const int is_deleted)
+ 			unlink((char*)statefn);
+ 		}
+ 	}
++	if(act->ratelimiter != NULL) {
++		ratelimitDestruct(act->ratelimiter);
++	}
+ 	#ifdef HAVE_INOTIFY_INIT
+ 	if(act->wd != -1) {
+ 		wdmapDel(act->wd);

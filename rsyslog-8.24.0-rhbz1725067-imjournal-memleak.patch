@@ -1,0 +1,49 @@
+From 920c28ff705aac74f389b4613815b14b9482e497 Mon Sep 17 00:00:00 2001
+From: Jiri Vymazal <jvymazal@redhat.com>
+Date: Mon, 21 Jan 2019 10:58:03 +0100
+Subject: [PATCH] Added missing free() calls of received journal cursor
+
+---
+ plugins/imjournal/imjournal.c | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/plugins/imjournal/imjournal.c b/plugins/imjournal/imjournal.c
+index a85e521003..f5c2be4b6e 100644
+--- a/plugins/imjournal/imjournal.c
++++ b/plugins/imjournal/imjournal.c
+@@ -411,8 +411,7 @@ readjournal(void)
+ 
+ 	if (cs.bWorkAroundJournalBug) {
+ 		/* save journal cursor (at this point we can be sure it is valid) */
+-		sd_journal_get_cursor(j, &c);
+-		if (c) {
++		if (!sd_journal_get_cursor(j, &c)) {
+ 			free(last_cursor);
+ 			last_cursor = c;
+ 		}
+@@ -444,7 +443,9 @@ persistJournalState(void)
+ 		if (!last_cursor)
+ 			ABORT_FINALIZE(RS_RET_OK);
+ 	} else if (trySave) {
++		free(last_cursor);
+ 		if ((ret = sd_journal_get_cursor(j, &last_cursor))) {
++			last_cursor = NULL;
+ 			LogError(-ret, RS_RET_ERR, "imjournal: sd_journal_get_cursor() failed");
+ 			ABORT_FINALIZE(RS_RET_ERR);
+ 		}
+@@ -592,6 +593,7 @@ loadJournalState(void)
+ 							iRet = RS_RET_ERR;
+ 						}
+ 					} 
++					free(tmp_cursor);
+ 				}
+ 			} else {
+ 				errmsg.LogError(0, RS_RET_IO_ERROR, "imjournal: "
+@@ -748,6 +750,7 @@ BEGINfreeCnf
+ CODESTARTfreeCnf
+ 	free(cs.stateFile);
+ 	free(cs.dfltTag);
++	free(last_cursor);
+ ENDfreeCnf
+ 
+ /* open journal */
