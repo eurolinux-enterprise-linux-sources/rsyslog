@@ -17,7 +17,7 @@ index a85e521003..f5c2be4b6e 100644
  		/* save journal cursor (at this point we can be sure it is valid) */
 -		sd_journal_get_cursor(j, &c);
 -		if (c) {
-+		if (!sd_journal_get_cursor(j, &c)) {
++		if (sd_journal_get_cursor(j, &c)) {
  			free(last_cursor);
  			last_cursor = c;
  		}

@@ -14,7 +14,7 @@
 Summary: Enhanced system logging and kernel message trapping daemon
 Name: rsyslog
 Version: 8.24.0
-Release: 41%{?dist}.2
+Release: 41%{?dist}
 License: (GPLv3+ and ASL 2.0)
 Group: System Environment/Daemons
 URL: http://www.rsyslog.com/
@@ -114,8 +114,6 @@ Patch51: rsyslog-8.24.0-rhbz1666365-internal-messages-memory-leak.patch
 Patch52: rsyslog-8.24.0-doc-rhbz1625935-mmkubernetes-CRI-O.patch
 Patch53: rsyslog-8.24.0-rhbz1656860-imfile-buffer-overflow.patch
 Patch54: rsyslog-8.24.0-rhbz1725067-imjournal-memleak.patch
-
-Patch55: rsyslog-8.24.0-rhbz1746497-ratelimiter-segfault.patch
 
 %package crypto
 Summary: Encryption support
@@ -421,8 +419,6 @@ mv build doc
 %patch53 -p1 -b .imfile-buffer-overflow
 %patch54 -p1 -b .imjournal-memleak
 
-%patch55 -p1 -b .ratelimit-crash
-
 autoreconf 
 
 %build
@@ -681,16 +677,6 @@ done
 %{_libdir}/rsyslog/mmkubernetes.so
 
 %changelog
-* Mon Sep 23 2019 Jiri Vymazal <jvymazal@redhat.com> - 8.24.0-41.2
-RHEL 7.7.z ERRATUM
-- edited imjournal memleaks patch to fix introduced regression
-  resolves: rhbz#1752424
-
-* Mon Sep 02 2019 Jiri Vymazal <jvymazal@redhat.com> - 8.24.0-41.1
-RHEL 7.7.z ERRATUM
-- added patch resolving possible segfault in core-ratelimiter
-  resolves: rhbz#1746497
-
 * Tue Jul 23 2019 Jiri Vymazal <jvymazal@redhat.com> - 8.24.0-41
 RHEL 7.7.z ERRATUM
 - added patch resolving memory leaks in imjournal
